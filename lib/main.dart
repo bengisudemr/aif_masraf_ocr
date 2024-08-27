@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
+import 'package:aif_masraf_ocr/loginpage.dart';
+
 
 void main() {
   runApp(const MyApp());
@@ -40,7 +42,11 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const MyHomePage(),
+      initialRoute: '/',  // Başlangıç rotası
+      routes: {
+        '/': (context) => const Loginpage(),  // Giriş sayfası
+        '/home': (context) => const MyHomePage(),  // Ana sayfa
+      },
     );
   }
 }
