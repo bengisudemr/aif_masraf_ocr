@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'dart:io';
 import 'package:aif_masraf_ocr/loginpage.dart';
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(MyApp());
@@ -11,26 +15,31 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: Color(0xFF162dd4), // Arka plan rengi
-        textTheme: TextTheme(
-          bodyLarge: TextStyle(color: Color(0xFF162dd4)), // Genel yazı rengi
-          bodyMedium: TextStyle(color: Color(0xFF162dd4)), // Genel yazı rengi
-          displayLarge: TextStyle(color: Color(0xFF162dd4), fontWeight: FontWeight.bold), // Başlık rengi
-          displayMedium: TextStyle(color: Color(0xFF162dd4), fontWeight: FontWeight.bold),
+        primaryColor: Color(0xFF162dd4),
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: Color(0xFF162dd4)),
+          bodyMedium: TextStyle(color: Color(0xFF162dd4)),
+          displayLarge:
+              TextStyle(color: Color(0xFF162dd4), fontWeight: FontWeight.bold),
+          displayMedium:
+              TextStyle(color: Color(0xFF162dd4), fontWeight: FontWeight.bold),
         ),
-        buttonTheme: ButtonThemeData(
-          buttonColor: Color(0xFF162dd4), // Buton arka plan rengi
-          textTheme: ButtonTextTheme.primary, // Buton yazı rengi
+        buttonTheme: const ButtonThemeData(
+          buttonColor: Color(0xFF162dd4),
+          textTheme: ButtonTextTheme.primary,
         ),
         cardTheme: CardTheme(
-          color: Color(0xFF162dd4).withOpacity(0.1), // Kart arka plan rengi
+          color: Color(0xFF162dd4).withOpacity(0.1),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-        ), colorScheme: ColorScheme.fromSwatch(
+        ),
+        colorScheme: ColorScheme.fromSwatch(
           primarySwatch: Colors.blue,
-          accentColor: Color(0xFF162dd4), // Vurgu renkleri
-        ).copyWith(secondary: Color(0xFF162dd4)).copyWith(background: Colors.grey[100]),
+          accentColor: Color(0xFF162dd4),
+        )
+            .copyWith(secondary: Color(0xFF162dd4))
+            .copyWith(background: Colors.grey[100]),
       ),
       home: Loginpage(),
     );
@@ -38,6 +47,123 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatelessWidget {
+  void _showFloatingMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          color: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library, color: Colors.white),
+                title: Text('Galeri', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  _selectFromGallery(context);
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.file_upload, color: Colors.white),
+                title:
+                    Text('Dosya yükle', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  _uploadFile(context);
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _selectFromGallery(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+
+    if (result != null) {
+      final file = result.files.single;
+      if (file.path != null) {
+        final ocrResult = await _sendToGoogleVisionApi(file.path!);
+        _navigateToFaturaDetayPage(context, ocrResult);
+      } else {
+        print('File path is null.');
+      }
+    } else {
+      print('No image selected.');
+    }
+  }
+
+  Future<void> _uploadFile(BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+    );
+
+    if (result != null) {
+      final file = result.files.single;
+      if (file.path != null) {
+        final ocrResult = await _sendToGoogleVisionApi(file.path!);
+        _navigateToFaturaDetayPage(context, ocrResult);
+      } else {
+        print('File path is null.');
+      }
+    } else {
+      print('No file selected.');
+    }
+  }
+
+  Future<String> _sendToGoogleVisionApi(String filePath) async {
+    final apiKey = 'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
+    final url =
+        'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
+
+    final file = File(filePath);
+    final bytes = await file.readAsBytes();
+    final base64Image = base64Encode(bytes);
+
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'requests': [
+          {
+            'image': {'content': base64Image},
+            'features': [
+              {'type': 'DOCUMENT_TEXT_DETECTION'},
+            ],
+          },
+        ],
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final jsonResponse = jsonDecode(response.body);
+      final ocrText = jsonResponse['responses']?[0]['fullTextAnnotation']
+              ?['text'] ??
+          'OCR sonucu bulunamadı.';
+      return ocrText;
+    } else {
+      print('Error: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      throw Exception('Failed to get OCR result.');
+    }
+  }
+
+  void _navigateToFaturaDetayPage(BuildContext context, String ocrResult) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FaturaDetayPage(ocrResult: ocrResult),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -81,7 +207,10 @@ class MyHomePage extends StatelessWidget {
                 ),
                 Text(
                   "Masraf girmeye hazır mısın?",
-                  style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16, fontWeight: FontWeight.w300),
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w300),
                 ),
               ],
             ),
@@ -116,7 +245,8 @@ class MyHomePage extends StatelessWidget {
                       onPressed: () {},
                     ),
                     IconButton(
-                      icon: Icon(Icons.filter_alt_outlined, color: Color(0xFF162dd4)),
+                      icon: Icon(Icons.filter_alt_outlined,
+                          color: Color(0xFF162dd4)),
                       onPressed: () {},
                     ),
                     IconButton(
@@ -142,43 +272,31 @@ class MyHomePage extends StatelessWidget {
                     title: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('01/01/2001', style: TextStyle(fontSize: 14, color: Colors.grey)),
-                        Text('Diğer', style: TextStyle(fontSize: 18)),
-                      ],
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('HUGIN YAZILIM T...'),
-                        SizedBox(height: 4),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Color.fromARGB(255, 21, 174, 93),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text('Hazır', style: TextStyle(color: Colors.white)),
+                        Text(
+                          'Masraf 1',
+                          style: TextStyle(fontWeight: FontWeight.bold),
                         ),
+                        Text('Tarih: 12/12/2024'),
+                        Text('Miktar: \$100'),
                       ],
                     ),
-                    trailing: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('15,00 TL', style: TextStyle(color: Color(0xFF162dd4), fontSize: 16)),
-                        Spacer(),
-                      ],
-                    ),
+                    trailing: Icon(Icons.more_vert),
+                    onTap: () {},
                   ),
                 ),
+                // Add more ListTile or Widgets here
               ],
             ),
           ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: Colors.white,
         selectedItemColor: Color(0xFF162dd4),
         unselectedItemColor: Colors.grey,
-        items: <BottomNavigationBarItem>[
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        items: [
           BottomNavigationBarItem(
             icon: Icon(Icons.home, size: 37),
             label: 'Anasayfa',
@@ -188,19 +306,60 @@ class MyHomePage extends StatelessWidget {
             label: 'Formlarım',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.add_circle, size: 68, color: Color(0xFF162dd4)),
-            label: 'Ekle',
+            icon: GestureDetector(
+              onTap: () => _showFloatingMenu(context),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Color(0xFF162dd4),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.add, color: Colors.white, size: 37),
+              ),
+            ),
+            label: '',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.check_circle_outline, size: 37),
-            label: 'Onaylar',
+            icon: Icon(Icons.search, size: 37),
+            label: 'Ara',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings, size: 37),
-            label: 'Ayarlar',
+            icon: Icon(Icons.person, size: 37),
+            label: 'Profil',
           ),
         ],
-        type: BottomNavigationBarType.fixed, // İkonları düzgün yerleştirir
+      ),
+    );
+  }
+}
+
+class FaturaDetayPage extends StatelessWidget {
+  final String ocrResult;
+
+  FaturaDetayPage({required this.ocrResult});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Color(0xFF162dd4),
+        title: Text('Fatura Detayları'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'OCR Sonuçları:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              SizedBox(height: 8),
+              Text(ocrResult),
+              // Add more widgets to display the OCR result details as needed
+            ],
+          ),
+        ),
       ),
     );
   }
