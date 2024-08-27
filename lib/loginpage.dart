@@ -46,7 +46,7 @@ class LoginScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10.0),
                   ),
                   child: Image(
-                    image: AssetImage('images/aif-logo.jpg'),
+                    image: AssetImage('assets/images/aif-logo.jpg'),
                     width: 100,
                   ),
                 ),
@@ -112,7 +112,7 @@ class LoginScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) =>
-                            const MyHomePage(), // İkinci sayfaya yönlendir
+                            MyHomePage(), // İkinci sayfaya yönlendir
                       ),
                     );
                   },
