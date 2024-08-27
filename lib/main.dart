@@ -82,7 +82,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               ListTile(
                 leading: const Icon(Icons.camera_alt),
-                title: const Text('Fotoğraf Çekme'),
+                title: const Text('Fotoğraf Çek'),
                 onTap: () async {
                   Navigator.pop(context);
                   await _requestCameraPermission();
