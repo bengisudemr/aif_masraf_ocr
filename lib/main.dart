@@ -1,7 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MyApp());
@@ -53,6 +56,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   bool _buttonEnabled = false;
   List<String> _selectedFiles = [];
+  String _ocrResult = '';
 
   void _toggleButton() {
     setState(() {
@@ -82,7 +86,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 onTap: () async {
                   Navigator.pop(context);
                   await _requestCameraPermission();
-                  _takeMultiplePhotos(); // Birden fazla fotoğraf çekmek için bu metodu çağır
+                  _takeMultiplePhotos();
                 },
               ),
               ListTile(
@@ -105,7 +109,6 @@ class _MyHomePageState extends State<MyHomePage> {
     if (!status.isGranted) {
       status = await Permission.camera.request();
       if (!status.isGranted) {
-        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Kamera izni verilmedi.')),
         );
@@ -119,19 +122,20 @@ class _MyHomePageState extends State<MyHomePage> {
 
     if (result != null) {
       setState(() {
-        _selectedFiles = result.files.map((file) => file.name).toList();
+        _selectedFiles = result.files.map((file) => file.path!).toList();
+        _buttonEnabled = true;
       });
     }
   }
 
   void _pickMultipleImages() async {
     final ImagePicker picker = ImagePicker();
-    // ignore: unnecessary_nullable_for_final_variable_declarations
     final List<XFile>? pickedFiles = await picker.pickMultiImage();
 
     if (pickedFiles != null) {
       setState(() {
-        _selectedFiles = pickedFiles.map((file) => file.name).toList();
+        _selectedFiles = pickedFiles.map((file) => file.path).toList();
+        _buttonEnabled = true;
       });
     }
   }
@@ -140,17 +144,71 @@ class _MyHomePageState extends State<MyHomePage> {
     final ImagePicker picker = ImagePicker();
     List<XFile> photos = [];
 
-    // 3 fotoğraf çekilecek şekilde ayarladım, ihtiyaca göre bu sayıyı değiştirebilirsiniz
-    for (int i = 0; i < 100; i++) {
-      final XFile? photo = await picker.pickImage(source: ImageSource.camera);
-      if (photo != null) {
-        photos.add(photo);
-      }
-    }
+    // Kullanıcıdan fotoğraf çekmesi istenir
+    final XFile? photo = await picker.pickImage(source: ImageSource.camera);
 
-    if (photos.isNotEmpty) {
+    if (photo != null) {
+      photos.add(photo);
       setState(() {
-        _selectedFiles.addAll(photos.map((photo) => photo.name));
+        _selectedFiles.add(photo.path);
+        _buttonEnabled = true;
+      });
+    }
+  }
+
+  Future<void> _performOCR() async {
+    if (_selectedFiles.isEmpty) return;
+
+    String apiKey = 'YOUR_API_KEY';
+    String url =
+        'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
+
+    List<Map<String, dynamic>> requests = _selectedFiles.map((file) {
+      String base64Image = base64Encode(File(file).readAsBytesSync());
+      return {
+        "image": {
+          "content": base64Image,
+        },
+        "features": [
+          {
+            "type": "TEXT_DETECTION",
+            "maxResults": 1,
+          }
+        ],
+      };
+    }).toList();
+
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({"requests": requests}),
+      );
+
+      print('Response Status: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+
+        final textAnnotations = jsonResponse['responses']
+            .map((res) => res['textAnnotations'] != null &&
+                    res['textAnnotations'].isNotEmpty
+                ? res['textAnnotations'][0]['description']
+                : 'No text detected')
+            .join('\n\n');
+
+        setState(() {
+          _ocrResult = textAnnotations;
+        });
+      } else {
+        setState(() {
+          _ocrResult = 'OCR başarısız oldu. Durum Kodu: ${response.statusCode}';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _ocrResult = 'OCR işlemi sırasında bir hata oluştu: $e';
       });
     }
   }
@@ -264,54 +322,27 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                         const SizedBox(height: 16),
                         GestureDetector(
-                          onTap: _toggleButton,
+                          onTap: _showPickerOptions,
                           child: Container(
-                            padding: const EdgeInsets.fromLTRB(
-                                15.0, 12.0, 15.0, 12.0),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: const BorderRadius.all(
+                            height: 60.0,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFDCFFD6),
+                              borderRadius: BorderRadius.all(
                                 Radius.circular(10.0),
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.2),
-                                  spreadRadius: 2,
-                                  blurRadius: 5,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
                             ),
                             child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                ElevatedButton(
-                                  onPressed: _showPickerOptions,
-                                  style: ElevatedButton.styleFrom(
-                                    foregroundColor: Colors.white,
-                                    backgroundColor: const Color(0xFF0D6EFD),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(5.0),
-                                    ),
-                                  ),
-                                  child: const Padding(
-                                    padding: EdgeInsets.all(10),
-                                    child: Text(
-                                      'Dosyaları Seç',
-                                      style: TextStyle(color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Text(
-                                    _selectedFiles.isEmpty
-                                        ? 'Dosya seçilmedi'
-                                        : _selectedFiles.join(', '),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.black,
-                                      fontFamily: 'Poppins',
-                                    ),
+                                const Icon(Icons.upload_file),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Dosya Seçin',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'Poppins',
+                                    color: Color(0xFF007C11),
                                   ),
                                 ),
                               ],
@@ -321,33 +352,54 @@ class _MyHomePageState extends State<MyHomePage> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.all(
-                        Radius.circular(10.0),
+                  const SizedBox(height: 18.0),
+                  GestureDetector(
+                    onTap: _buttonEnabled ? _performOCR : null,
+                    child: Container(
+                      height: 60.0,
+                      decoration: BoxDecoration(
+                        color: _buttonEnabled
+                            ? const Color(0xFF162dd4)
+                            : Colors.grey,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(10.0),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.file_upload, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text(
+                            'Yükle ve Analiz Et',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Poppins',
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D6EFD),
-                          padding: const EdgeInsets.all(12.0),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10.0),
+                  ),
+                  const SizedBox(height: 18.0),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Container(
+                        padding: const EdgeInsets.all(16.0),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(10.0),
                           ),
                         ),
-                        onPressed: _buttonEnabled ? () {} : null,
-                        child: const Text(
-                          'Yükle ve Analiz Et',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        child: Text(
+                          _ocrResult,
+                          style: const TextStyle(
+                            fontSize: 16,
                             fontFamily: 'Poppins',
+                            color: Colors.black,
                           ),
                         ),
                       ),
