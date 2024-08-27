@@ -7,7 +7,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:aif_masraf_ocr/loginpage.dart';
 
-
 void main() {
   runApp(const MyApp());
 }
@@ -15,6 +14,17 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: const MainPage(), // MainPage, ana sayfanızın sınıfı olmalıdır.
+    );
+  }
+}
+
+class MainPage extends StatelessWidget {
+  const MainPage({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -42,10 +52,10 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      initialRoute: '/',  // Başlangıç rotası
+      initialRoute: '/', // Başlangıç rotası
       routes: {
-        '/': (context) => const Loginpage(),  // Giriş sayfası
-        '/home': (context) => const MyHomePage(),  // Ana sayfa
+        '/': (context) => const Loginpage(), // Giriş sayfası
+        '/home': (context) => const MyHomePage(), // Ana sayfa
       },
     );
   }

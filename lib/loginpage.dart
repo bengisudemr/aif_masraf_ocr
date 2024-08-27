@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'main.dart'; // main.dart dosyanızı buraya dahil edin
 
 class Loginpage extends StatelessWidget {
   const Loginpage({super.key});
@@ -25,9 +26,9 @@ class LoginScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: double.infinity, // Container genişliği sayfanın tamamını kaplayacak
+            width: double.infinity,
             decoration: BoxDecoration(
-              color: const Color(0xFF162dd4), // Arka plan rengi
+              color: const Color(0xFF162dd4),
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(70),
                 bottomRight: Radius.circular(70),
@@ -35,17 +36,17 @@ class LoginScreen extends StatelessWidget {
             ),
             padding: const EdgeInsets.all(40),
             child: Align(
-              alignment: Alignment.bottomCenter, // Alt ortada hizalama
+              alignment: Alignment.bottomCenter,
               child: Transform.translate(
-                offset: Offset(0, 100), // Logo container'ını yukarı taşıma
+                offset: Offset(0, 100),
                 child: Container(
-                  padding: const EdgeInsets.all(10.0), // Logo etrafında padding
+                  padding: const EdgeInsets.all(10.0),
                   decoration: BoxDecoration(
-                    color: Colors.white, // Logo etrafında beyaz arka plan
-                    borderRadius: BorderRadius.circular(10.0), // Border radius
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10.0),
                   ),
                   child: Image(
-                    image: AssetImage('images/aif-logo.jpg'), // Logo
+                    image: AssetImage('images/aif-logo.jpg'),
                     width: 100,
                   ),
                 ),
@@ -63,8 +64,8 @@ class LoginScreen extends StatelessWidget {
                     prefixIcon: const Icon(Icons.email),
                     hintText: 'E-Posta',
                     hintStyle: TextStyle(
-                      color: Colors.grey, // Hint yazısı rengi
-                      fontWeight: FontWeight.w300, // İnce yazı
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w300,
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -78,8 +79,8 @@ class LoginScreen extends StatelessWidget {
                     prefixIcon: const Icon(Icons.lock),
                     hintText: 'Şifre',
                     hintStyle: TextStyle(
-                      color: Colors.grey, // Hint yazısı rengi
-                      fontWeight: FontWeight.w300, // İnce yazı
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w300,
                     ),
                     suffixIcon: const Icon(Icons.visibility_off),
                     border: OutlineInputBorder(
@@ -93,7 +94,7 @@ class LoginScreen extends StatelessWidget {
                     Checkbox(
                       value: false,
                       onChanged: (value) {},
-                      activeColor: const Color(0xFF162dd4), // Beni Hatırla checkbox'ın rengi
+                      activeColor: const Color(0xFF162dd4),
                     ),
                     const Text('Beni Hatırla'),
                     const Spacer(),
@@ -105,30 +106,39 @@ class LoginScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    // Giriş butonuna basıldığında yönlendirme yapılır
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            const MyHomePage(), // İkinci sayfaya yönlendir
+                      ),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D6EFD), // Buton rengini değiştirdik
+                    backgroundColor: const Color(0xFF0D6EFD),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10), // Buton köşeleri yuvarlatıldı
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
                   child: const Text(
                     'Giriş',
-                    style: TextStyle(color: Colors.white), // Buton yazı rengi beyaz
+                    style: TextStyle(color: Colors.white),
                   ),
                 ),
                 const SizedBox(height: 30),
                 ElevatedButton.icon(
                   onPressed: () {},
-                  icon: Image.asset('images/google-logo.png', width: 24), // Google logosu
+                  icon: Image.asset('assets/images/google.png', width: 24),
                   label: const Text('Google ile Giriş Yap'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
                     side: const BorderSide(color: Colors.black),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10), // Buton köşeleri yuvarlatıldı
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
@@ -136,14 +146,14 @@ class LoginScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
                   onPressed: () {},
-                  icon: Image.asset('images/microsoft-logo.png', width: 24), // Microsoft logosu
+                  icon: Image.asset('assets/images/microsoft.png', width: 24),
                   label: const Text('Microsoft ile Giriş Yap'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
                     side: const BorderSide(color: Colors.black),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10), // Buton köşeleri yuvarlatıldı
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
