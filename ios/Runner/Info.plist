@@ -44,6 +44,11 @@
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<key>NSCameraUsageDescription</key>
+	<string>Bu uygulama fotoğraf çekmek için kamerayı kullanacaktır.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Bu uygulama fotoğraf galerisine erişmek için izin istiyor.</string>
+
 	<true/>
 </dict>
 </plist>

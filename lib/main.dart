@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 void main() {
   runApp(MyApp());
@@ -56,6 +57,23 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   List<String> invoices = [];
   List<String> titles = []; // List to store titles from OCR results
+  Future<void> _pickImageFromCamera() async {
+    final ImagePicker _picker = ImagePicker();
+    final XFile? pickedFile =
+        await _picker.pickImage(source: ImageSource.camera);
+
+    if (pickedFile != null) {
+      final filePath = pickedFile.path;
+      if (filePath != null) {
+        final ocrResult = await _sendToGoogleVisionApi(filePath);
+        await _analyzeWithGPTAndNavigate(ocrResult, filePath);
+      } else {
+        print('File path is null.');
+      }
+    } else {
+      print('No image selected.');
+    }
+  }
 
   void _showFloatingMenu(BuildContext context) {
     showModalBottomSheet(
@@ -96,6 +114,14 @@ class _MyHomePageState extends State<MyHomePage> {
                   );
                 },
               ),
+              ListTile(
+                leading: Icon(Icons.camera, color: Colors.white),
+                title: Text('Kamera', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  ();
+                  Navigator.pop(context);
+                },
+              )
             ],
           ),
         );
