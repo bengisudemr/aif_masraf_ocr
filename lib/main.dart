@@ -1,10 +1,11 @@
-import 'dart:convert';
-import 'dart:io';
+import 'package:aif_masraf_ocr/faturadetay.dart';
+import 'package:aif_masraf_ocr/loginpage.dart';
+import 'package:aif_masraf_ocr/manuelmasrafdetaypage.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
-import 'package:aif_masraf_ocr/loginpage.dart';
-import 'package:aif_masraf_ocr/faturadetay.dart';
+import 'dart:convert';
+import 'dart:io';
 
 void main() {
   runApp(MyApp());
@@ -83,6 +84,18 @@ class _MyHomePageState extends State<MyHomePage> {
                   Navigator.pop(context);
                 },
               ),
+              ListTile(
+                leading: Icon(Icons.format_align_center, color: Colors.white),
+                title: Text('Manuel', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ManuelMasrafFormPage(),
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         );
@@ -101,7 +114,7 @@ class _MyHomePageState extends State<MyHomePage> {
       final filePath = file.path;
       if (filePath != null) {
         final ocrResult = await _sendToGoogleVisionApi(filePath);
-        _addInvoice(ocrResult, filePath);
+        await _analyzeWithGPTAndNavigate(ocrResult, filePath);
       } else {
         print('File path is null.');
       }
@@ -119,7 +132,7 @@ class _MyHomePageState extends State<MyHomePage> {
       final file = result.files.single;
       if (file.path != null) {
         final ocrResult = await _sendToGoogleVisionApi(file.path!);
-        _addInvoice(ocrResult, file.path!);
+        await _analyzeWithGPTAndNavigate(ocrResult, file.path!);
       } else {
         print('File path is null.');
       }
@@ -130,9 +143,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<String> _sendToGoogleVisionApi(String filePath) async {
     final apiKey =
-        'YOUR_GOOGLE_CLOUD_VISION_API_KEY'; // Update your API key here
+        'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s'; // Replace with your API key
     final url =
-        'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s'; // Update your API key here
+        'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
 
     final file = File(filePath);
     final bytes = await file.readAsBytes();
@@ -157,7 +170,7 @@ class _MyHomePageState extends State<MyHomePage> {
       final jsonResponse = jsonDecode(response.body);
       final textAnnotation =
           jsonResponse['responses']?[0]['fullTextAnnotation'];
-      final ocrText = textAnnotation?['text'] ?? 'OCR sonucu bulunamadı.';
+      final ocrText = textAnnotation?['text'] ?? 'OCR result not found.';
       return ocrText;
     } else {
       print('Error: ${response.statusCode}');
@@ -166,22 +179,85 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _addInvoice(String ocrResult, String filePath) {
-    final firstLine = ocrResult.split('\n').first;
-    setState(() {
-      invoices.add(ocrResult);
-      titles.add(firstLine);
-    });
+  Future<void> _analyzeWithGPTAndNavigate(
+      String ocrResult, String filePath) async {
+    try {
+      final analysisResult = await fetchGPTAnalysis(ocrResult);
+      final formattedResult = _formatAnalysisResult(analysisResult);
+
+      // İlk satırı başlık olarak ayırın
+      final firstLine = ocrResult.split('\n').first;
+
+      // OCR sonucunu listeye ekleyin
+      setState(() {
+        invoices.add(formattedResult);
+        titles.add(firstLine); // Başlık için ilk satırı kullanın
+      });
+    } catch (e) {
+      print('Error analyzing with GPT: $e');
+    }
   }
 
-  void _navigateToFaturaDetayPage(
-      BuildContext context, String ocrResult, String imagePath) {
+  Future<Map<String, dynamic>> fetchGPTAnalysis(String ocrText) async {
+    const apiKey =
+        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A'; // API anahtarınızı buraya ekleyin
+    final response = await http.post(
+      Uri.parse('https://api.openai.com/v1/chat/completions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': apiKey,
+      },
+      body: jsonEncode({
+        'model': 'gpt-3.5-turbo',
+        'messages': [
+          {
+            'role': 'user',
+            'content':
+                '''Aşağıdaki metinden fiş bilgilerini analiz et ve tablo olarak ver:
+          
+          $ocrText
+          
+          ŞİRKET ADI:
+          ADRES:
+          VERGİ DAİRESİ:
+          VERGİ NUMARASI:
+          FİŞ TARİHİ:
+          SAAT:
+          FİŞ NO:
+          KDV ORANI:
+          KDV TUTARI:
+          TOPLAM TUTAR:
+          ÖDEME YÖNTEMİ:
+          SATIN ALINAN ÜRÜNLER: (Ürün Adı, KDV Oranı, Tutar)
+          '''
+          }
+        ],
+        'max_tokens': 1000,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print('Error: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      throw Exception('Failed to fetch data from GPT');
+    }
+  }
+
+  String _formatAnalysisResult(Map<String, dynamic> analysisResult) {
+    // Extract and format the analysis result from GPT API
+    return analysisResult['choices'][0]['message']['content'];
+  }
+
+  void _navigateToMasrafDetayPage(
+      BuildContext context, String analysisResult, String imagePath) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FaturaDetayPage(
-          ocrResult: ocrResult,
-          imagePath: imagePath,
+        builder: (context) => MasrafDetayPage(
+          ocrText: analysisResult,
+          gptData: {},
         ),
       ),
     );
@@ -242,70 +318,80 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ToggleButtons(
-                  borderRadius: BorderRadius.circular(20),
-                  selectedBorderColor: Color(0xFF162dd4),
-                  fillColor: Color(0xFF162dd4).withOpacity(0.2),
-                  selectedColor: Color(0xFF162dd4),
-                  color: Colors.grey,
-                  constraints: BoxConstraints(minWidth: 100, minHeight: 36),
-                  children: [
-                    Text("Açık"),
-                    Text("Tamamlandı"),
-                  ],
-                  isSelected: [true, false],
-                  onPressed: (index) {},
-                ),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.refresh, color: Color(0xFF162dd4)),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.filter_alt_outlined,
-                          color: Color(0xFF162dd4)),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.sort, color: Color(0xFF162dd4)),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          SizedBox(height: 8),
           Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              itemCount: invoices.length,
-              itemBuilder: (context, index) {
-                return Card(
-                  margin: EdgeInsets.symmetric(vertical: 8),
-                  child: ListTile(
-                    title: Text(titles[index]), // Display title
-                    subtitle: Text(invoices[index]),
-                    onTap: () => _navigateToFaturaDetayPage(
-                        context,
-                        invoices[index],
-                        'path_to_image_if_any'), // Update with actual image path
+            child: invoices.isNotEmpty
+                ? ListView.builder(
+                    itemCount: invoices.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        child: Card(
+                          elevation: 2,
+                          child: ListTile(
+                            title: Text(
+                              titles.isNotEmpty && index < titles.length
+                                  ? titles[index]
+                                  : 'Invoice ${index + 1}',
+                              style: TextStyle(
+                                  color: Color(0xFF162dd4),
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => MasrafDetayPage(
+                                    ocrText: invoices[index],
+                                    gptData: {},
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : Center(
+                    child: Text(
+                      'Henüz masraf girişi yapılmadı',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Color(0xFF162dd4),
-        child: Icon(Icons.add),
         onPressed: () => _showFloatingMenu(context),
+        child: Icon(Icons.add, color: Colors.white),
+        backgroundColor: Color(0xFF162dd4),
+        elevation: 4,
+      ),
+      bottomNavigationBar: BottomAppBar(
+        shape: CircularNotchedRectangle(),
+        notchMargin: 10,
+        color: Colors.white,
+        elevation: 20,
+        child: Container(
+          height: 60,
+          padding: EdgeInsets.symmetric(horizontal: 30),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(Icons.home, color: Color(0xFF162dd4)),
+              Icon(Icons.list_alt, color: Colors.grey),
+              SizedBox(width: 24), // Center icon spacing
+              Icon(Icons.check_sharp, color: Colors.grey),
+              Icon(Icons.settings, color: Colors.grey),
+            ],
+          ),
+        ),
       ),
     );
   }

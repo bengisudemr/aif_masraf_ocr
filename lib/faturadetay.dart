@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(MasrafDetayPage());
-}
-
 class MasrafDetayPage extends StatelessWidget {
+  final Map<String, dynamic> gptData;
+
+  MasrafDetayPage({required this.gptData, required String ocrText});
+
   @override
   Widget build(BuildContext context) {
+    print(gptData);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
@@ -14,26 +15,30 @@ class MasrafDetayPage extends StatelessWidget {
           leading: IconButton(
             icon: Icon(Icons.arrow_back),
             onPressed: () {
-              // Geri butonuna basıldığında yapılacak işlemi buraya ekleyebilirsiniz.
+              Navigator.of(context).pop();
             },
           ),
           title: Text(
             "Masraf Detayı",
             style: TextStyle(
-              fontSize: 18, // Yazı boyutunu küçültüyoruz
+              fontSize: 18,
             ),
           ),
-          centerTitle: true, // Yazıyı ortalıyoruz
+          centerTitle: true,
           actions: [
             TextButton(
-              onPressed: () {},
+              onPressed: () {
+                // Tahsis butonuna tıklama işlevi
+              },
               child: Text("Tahsis"),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.blue,
               ),
             ),
             TextButton(
-              onPressed: () {},
+              onPressed: () {
+                // Kaydet butonuna tıklama işlevi
+              },
               child: Text("Kaydet"),
               style: TextButton.styleFrom(
                 foregroundColor: Colors.blue,
@@ -46,42 +51,49 @@ class MasrafDetayPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Fiş Resmi
               Container(
                 alignment: Alignment.center,
                 child: Image.asset(
-                  'assets/receipt.jpg', // Bu yolda resim dosyasını ekleyin.
+                  'assets/images/receipt.jpg',
                   height: 300,
                 ),
               ),
               SizedBox(height: 20),
-              // Kategori Alanı
-              _buildDropdownRow("Kategori", "Diğer"),
+              _buildTextRow("Şirket Adı", gptData['Şirket Adı'] ?? 'N/A'),
               Divider(),
-              // Masraf Merkezi Alanı
-              _buildDropdownRow("Masraf Merkezi", "Seçim Yapınız"),
+              _buildTextRow("Adres", gptData['Adres'] ?? 'N/A'),
               Divider(),
-              // Toplam Tutar Alanı
-              _buildTextRow("Toplam Tutarı", "15,00"),
+              _buildTextRow("Vergi Dairesi", gptData['Vergi Dairesi'] ?? 'N/A'),
               Divider(),
-              // KDV Oranı Alanı
-              _buildDropdownRow("KDV Oranı", "% 0"),
+              _buildTextRow(
+                  "Vergi Numarası", gptData['Vergi Numarası'] ?? 'N/A'),
               Divider(),
-              // KDV Tutarı Alanı
-              _buildTextRow("KDV Tutarı", "0,00"),
+              _buildTextRow("Fiş Tarihi", gptData['Fiş Tarihi'] ?? 'N/A'),
               Divider(),
-              // Para Birimi Alanı
-              _buildDropdownRow("Para Birimi", "TL"),
+              _buildTextRow("Saat", gptData['Saat'] ?? 'N/A'),
               Divider(),
-              // Kurum Adı Alanı
-              _buildTextRow("Kurum Adı", "HUGIN YAZILIM TEKNOLOJILERI"),
+              _buildTextRow("Fiş No", gptData['Fiş No'] ?? 'N/A'),
               Divider(),
-              // Tarih Alanı
-              _buildTextRow("Tarih", "24/07/2024"),
+              _buildTextRow("KDV Oranı", gptData['KDV Oranı'] ?? 'N/A'),
               Divider(),
-              // Belge No Alanı
-              _buildTextRow("Belge No", "0010"),
+              _buildTextRow("KDV Tutarı", gptData['KDV Tutarı'] ?? 'N/A'),
               Divider(),
+              _buildTextRow("Toplam Tutar", gptData['Toplam Tutar'] ?? 'N/A'),
+              Divider(),
+              _buildTextRow("Ödeme Yöntemi", gptData['Ödeme Yöntemi'] ?? 'N/A'),
+              Divider(),
+              if (gptData['Satın Alınan Ürünler'] != null)
+                ...gptData['Satın Alınan Ürünler'].map<Widget>((item) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTextRow("Ürün Adı", item['Ürün Adı'] ?? 'N/A'),
+                      _buildTextRow("KDV Oranı", item['KDV Oranı'] ?? 'N/A'),
+                      _buildTextRow("Tutar", item['Tutar'] ?? 'N/A'),
+                      Divider(),
+                    ],
+                  );
+                }).toList(),
             ],
           ),
         ),
@@ -89,32 +101,20 @@ class MasrafDetayPage extends StatelessWidget {
     );
   }
 
-  Widget _buildDropdownRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0), // Satırlara 12 birim padding ekliyoruz
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(fontSize: 16)),
-          Row(
-            children: [
-              Text(value, style: TextStyle(fontSize: 16)),
-              Icon(Icons.keyboard_arrow_down),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTextRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0), // Satırlara 12 birim padding ekliyoruz
+      padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(fontSize: 16)),
-          Text(value, style: TextStyle(fontSize: 16)),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(fontSize: 16),
+              textAlign: TextAlign.right,
+            ),
+          ),
         ],
       ),
     );
