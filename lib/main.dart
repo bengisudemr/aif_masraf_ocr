@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:aif_masraf_ocr/loginpage.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:aif_masraf_ocr/loginpage.dart';
+import 'package:aif_masraf_ocr/faturadetay.dart';
 
 void main() {
   runApp(MyApp());
@@ -46,7 +47,15 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyHomePage extends StatelessWidget {
+class MyHomePage extends StatefulWidget {
+  @override
+  _MyHomePageState createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  List<String> invoices = [];
+  List<String> titles = []; // List to store titles from OCR results
+
   void _showFloatingMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -87,11 +96,12 @@ class MyHomePage extends StatelessWidget {
       allowMultiple: false,
     );
 
-    if (result != null) {
+    if (result != null && result.files.isNotEmpty) {
       final file = result.files.single;
-      if (file.path != null) {
-        final ocrResult = await _sendToGoogleVisionApi(file.path!);
-        _navigateToFaturaDetayPage(context, ocrResult);
+      final filePath = file.path;
+      if (filePath != null) {
+        final ocrResult = await _sendToGoogleVisionApi(filePath);
+        _addInvoice(ocrResult, filePath);
       } else {
         print('File path is null.');
       }
@@ -105,11 +115,11 @@ class MyHomePage extends StatelessWidget {
       allowMultiple: false,
     );
 
-    if (result != null) {
+    if (result != null && result.files.isNotEmpty) {
       final file = result.files.single;
       if (file.path != null) {
         final ocrResult = await _sendToGoogleVisionApi(file.path!);
-        _navigateToFaturaDetayPage(context, ocrResult);
+        _addInvoice(ocrResult, file.path!);
       } else {
         print('File path is null.');
       }
@@ -119,9 +129,10 @@ class MyHomePage extends StatelessWidget {
   }
 
   Future<String> _sendToGoogleVisionApi(String filePath) async {
-    final apiKey = 'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
+    final apiKey =
+        'YOUR_GOOGLE_CLOUD_VISION_API_KEY'; // Update your API key here
     final url =
-        'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
+        'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s'; // Update your API key here
 
     final file = File(filePath);
     final bytes = await file.readAsBytes();
@@ -144,9 +155,9 @@ class MyHomePage extends StatelessWidget {
 
     if (response.statusCode == 200) {
       final jsonResponse = jsonDecode(response.body);
-      final ocrText = jsonResponse['responses']?[0]['fullTextAnnotation']
-              ?['text'] ??
-          'OCR sonucu bulunamadı.';
+      final textAnnotation =
+          jsonResponse['responses']?[0]['fullTextAnnotation'];
+      final ocrText = textAnnotation?['text'] ?? 'OCR sonucu bulunamadı.';
       return ocrText;
     } else {
       print('Error: ${response.statusCode}');
@@ -155,11 +166,23 @@ class MyHomePage extends StatelessWidget {
     }
   }
 
-  void _navigateToFaturaDetayPage(BuildContext context, String ocrResult) {
+  void _addInvoice(String ocrResult, String filePath) {
+    final firstLine = ocrResult.split('\n').first;
+    setState(() {
+      invoices.add(ocrResult);
+      titles.add(firstLine);
+    });
+  }
+
+  void _navigateToFaturaDetayPage(
+      BuildContext context, String ocrResult, String imagePath) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FaturaDetayPage(ocrResult: ocrResult),
+        builder: (context) => FaturaDetayPage(
+          ocrResult: ocrResult,
+          imagePath: imagePath,
+        ),
       ),
     );
   }
@@ -259,107 +282,30 @@ class MyHomePage extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView(
+            child: ListView.builder(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                Card(
+              itemCount: invoices.length,
+              itemBuilder: (context, index) {
+                return Card(
+                  margin: EdgeInsets.symmetric(vertical: 8),
                   child: ListTile(
-                    leading: Image.network(
-                      'https://via.placeholder.com/50',
-                      width: 75,
-                      height: 75,
-                    ),
-                    title: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Masraf 1',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Text('Tarih: 12/12/2024'),
-                        Text('Miktar: \$100'),
-                      ],
-                    ),
-                    trailing: Icon(Icons.more_vert),
-                    onTap: () {},
+                    title: Text(titles[index]), // Display title
+                    subtitle: Text(invoices[index]),
+                    onTap: () => _navigateToFaturaDetayPage(
+                        context,
+                        invoices[index],
+                        'path_to_image_if_any'), // Update with actual image path
                   ),
-                ),
-                // Add more ListTile or Widgets here
-              ],
+                );
+              },
             ),
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.white,
-        selectedItemColor: Color(0xFF162dd4),
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home, size: 37),
-            label: 'Anasayfa',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.article, size: 37),
-            label: 'Formlarım',
-          ),
-          BottomNavigationBarItem(
-            icon: GestureDetector(
-              onTap: () => _showFloatingMenu(context),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Color(0xFF162dd4),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.add, color: Colors.white, size: 37),
-              ),
-            ),
-            label: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search, size: 37),
-            label: 'Ara',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person, size: 37),
-            label: 'Profil',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class FaturaDetayPage extends StatelessWidget {
-  final String ocrResult;
-
-  FaturaDetayPage({required this.ocrResult});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
+      floatingActionButton: FloatingActionButton(
         backgroundColor: Color(0xFF162dd4),
-        title: Text('Fatura Detayları'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'OCR Sonuçları:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              SizedBox(height: 8),
-              Text(ocrResult),
-              // Add more widgets to display the OCR result details as needed
-            ],
-          ),
-        ),
+        child: Icon(Icons.add),
+        onPressed: () => _showFloatingMenu(context),
       ),
     );
   }
