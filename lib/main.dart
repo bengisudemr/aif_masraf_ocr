@@ -1,6 +1,7 @@
 import 'package:aif_masraf_ocr/faturadetay.dart';
 import 'package:aif_masraf_ocr/loginpage.dart';
 import 'package:aif_masraf_ocr/manuelmasrafdetaypage.dart';
+import 'package:aif_masraf_ocr/services/api_Service.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
@@ -208,20 +209,49 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> _analyzeWithGPTAndNavigate(
       String ocrResult, String filePath) async {
     try {
-      final analysisResult = await fetchGPTAnalysis(ocrResult);
-      final formattedResult = _formatAnalysisResult(analysisResult);
+      final apiService = ApiService();
+      final analysisResult =
+          await fetchGPTAnalysis(ocrResult); // Fetch analysis result
 
-      // İlk satırı başlık olarak ayırın
-      final firstLine = ocrResult.split('\n').first;
-
-      // OCR sonucunu listeye ekleyin
-      setState(() {
-        invoices.add(formattedResult);
-        titles.add(firstLine); // Başlık için ilk satırı kullanın
-      });
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FaturaDetayPage(
+            analysisResult: analysisResult['choices'][0]['message']['content'],
+            imagePath: filePath,
+            invoiceData: {}, // Pass additional invoice data if needed
+          ),
+        ),
+      );
     } catch (e) {
       print('Error analyzing with GPT: $e');
     }
+  }
+
+  Map<String, dynamic> _parseOcrResults(String ocrResult) {
+    // Parse the OCR result and build the JSON structure
+    // This function should be customized based on how your OCR result looks
+    return {
+      'companyName': 'Şirket Adı',
+      'address': 'Adres',
+      'taxOffice': 'Vergi Dairesi',
+      'taxNumber': 'Vergi Numarası',
+      'receiptDate': 'Fiş Tarihi',
+      'receiptTime': 'Saat',
+      'receiptNumber': 'Fiş No',
+      'vatRate': 'KDV Oranı',
+      'vatAmount': 'KDV Tutarı',
+      'totalAmount': 'Toplam Tutar',
+      'paymentMethod': 'Ödeme Yöntemi',
+      'purchasedItems': [
+        {
+          'itemName': 'Ürün Adı',
+          'itemVatRate': 'KDV Oranı',
+          'itemAmount': 'Tutar',
+        },
+        // Add more items if needed
+      ],
+    };
   }
 
   Future<Map<String, dynamic>> fetchGPTAnalysis(String ocrText) async {
@@ -281,9 +311,10 @@ class _MyHomePageState extends State<MyHomePage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => MasrafDetayPage(
-          ocrText: analysisResult,
-          gptData: {},
+        builder: (context) => FaturaDetayPage(
+          analysisResult: '',
+          imagePath: '',
+          invoiceData: {},
         ),
       ),
     );
@@ -368,9 +399,10 @@ class _MyHomePageState extends State<MyHomePage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => MasrafDetayPage(
-                                    ocrText: invoices[index],
-                                    gptData: {},
+                                  builder: (context) => FaturaDetayPage(
+                                    invoiceData: {},
+                                    imagePath: '',
+                                    analysisResult: '',
                                   ),
                                 ),
                               );
