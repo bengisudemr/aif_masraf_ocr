@@ -58,6 +58,7 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   List<String> invoices = [];
   List<String> titles = []; // List to store titles from OCR results
+
   Future<void> _pickImageFromCamera() async {
     final ImagePicker _picker = ImagePicker();
     final XFile? pickedFile =
@@ -119,7 +120,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 leading: Icon(Icons.camera, color: Colors.white),
                 title: Text('Kamera', style: TextStyle(color: Colors.white)),
                 onTap: () {
-                  ();
+                  _pickImageFromCamera(); // Kamera ile resim çekmek için eklenen fonksiyon
                   Navigator.pop(context);
                 },
               )
@@ -168,58 +169,92 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  Future<String> _convertImageToBase64(String filePath) async {
+    final bytes = await File(filePath).readAsBytes();
+    return base64Encode(bytes);
+  }
+
   Future<String> _sendToGoogleVisionApi(String filePath) async {
-    final apiKey =
-        'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s'; // Replace with your API key
+    const apiKey =
+        'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s'; // API anahtarınızı buraya ekleyin.
     final url =
         'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
 
-    final file = File(filePath);
-    final bytes = await file.readAsBytes();
-    final base64Image = base64Encode(bytes);
+    try {
+      final base64Image = await _convertImageToBase64(filePath);
 
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'requests': [
-          {
-            'image': {'content': base64Image},
-            'features': [
-              {'type': 'DOCUMENT_TEXT_DETECTION'},
-            ],
-          },
-        ],
-      }),
-    );
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "requests": [
+            {
+              "image": {"content": base64Image},
+              "features": [
+                {"type": "TEXT_DETECTION"}
+              ]
+            }
+          ]
+        }),
+      );
 
-    if (response.statusCode == 200) {
-      final jsonResponse = jsonDecode(response.body);
-      final textAnnotation =
-          jsonResponse['responses']?[0]['fullTextAnnotation'];
-      final ocrText = textAnnotation?['text'] ?? 'OCR result not found.';
-      return ocrText;
-    } else {
-      print('Error: ${response.statusCode}');
-      print('Response body: ${response.body}');
-      throw Exception('Failed to get OCR result.');
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        final extractedText = jsonResponse['responses']?[0]
+                ['fullTextAnnotation']?['text'] ??
+            'No text found';
+        return extractedText;
+      } else {
+        throw Exception(
+            'Failed to get OCR result. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error in _sendToGoogleVisionApi: $e');
+      return 'Error occurred during API call';
     }
+  }
+
+  /// Bu fonksiyon karakter hatalarını düzeltmek için manuel olarak müdahale eder
+  String _fixMalformedCharacters(String input) {
+    // Türkçe karakterleri manuel olarak düzeltiyoruz
+    return input
+        .replaceAll('Ã§', 'ç')
+        .replaceAll('Ã¶', 'ö')
+        .replaceAll('Ã¼', 'ü')
+        .replaceAll('ÅŸ', 'ş')
+        .replaceAll('Ä±', 'ı')
+        .replaceAll('ÄŸ', 'ğ')
+        .replaceAll('Ã‡', 'Ç')
+        .replaceAll('Ã–', 'Ö')
+        .replaceAll('Ãœ', 'Ü')
+        .replaceAll('Åž', 'Ş')
+        .replaceAll('Ä°', 'İ')
+        .replaceAll('ÄŸ', 'ğ');
   }
 
   Future<void> _analyzeWithGPTAndNavigate(
       String ocrResult, String filePath) async {
     try {
-      final apiService = ApiService();
       final analysisResult =
-          await fetchGPTAnalysis(ocrResult); // Fetch analysis result
+          await fetchGPTAnalysis(ocrResult); // GPT Analizini al
+
+      // OpenAI'dan gelen sonucu UTF-8 olarak decode et
+      final utf8Result =
+          _decodeUtf8(analysisResult['choices'][0]['message']['content']);
+
+      // Gelen yanıtı manuel olarak düzeltmek
+      final fixedResult = _fixMalformedCharacters(utf8Result);
 
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => FaturaDetayPage(
-            analysisResult: analysisResult['choices'][0]['message']['content'],
+            analysisResult: _formatAnalysisResult(fixedResult),
             imagePath: filePath,
-            invoiceData: {}, // Pass additional invoice data if needed
+            invoiceData: _parseOcrResults(ocrResult),
           ),
         ),
       );
@@ -228,35 +263,19 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  Map<String, dynamic> _parseOcrResults(String ocrResult) {
-    // Parse the OCR result and build the JSON structure
-    // This function should be customized based on how your OCR result looks
-    return {
-      'companyName': 'Şirket Adı',
-      'address': 'Adres',
-      'taxOffice': 'Vergi Dairesi',
-      'taxNumber': 'Vergi Numarası',
-      'receiptDate': 'Fiş Tarihi',
-      'receiptTime': 'Saat',
-      'receiptNumber': 'Fiş No',
-      'vatRate': 'KDV Oranı',
-      'vatAmount': 'KDV Tutarı',
-      'totalAmount': 'Toplam Tutar',
-      'paymentMethod': 'Ödeme Yöntemi',
-      'purchasedItems': [
-        {
-          'itemName': 'Ürün Adı',
-          'itemVatRate': 'KDV Oranı',
-          'itemAmount': 'Tutar',
-        },
-        // Add more items if needed
-      ],
-    };
+  String _decodeUtf8(String encodedText) {
+    // Metni UTF-8 olarak decode edin
+    try {
+      return utf8.decode(encodedText.runes.toList(), allowMalformed: true);
+    } catch (e) {
+      print("UTF-8 decoding error: $e");
+      return encodedText; // Hata durumunda orijinal metni döndür
+    }
   }
 
   Future<Map<String, dynamic>> fetchGPTAnalysis(String ocrText) async {
     const apiKey =
-        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A'; // API anahtarınızı buraya ekleyin
+        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A';
     final response = await http.post(
       Uri.parse('https://api.openai.com/v1/chat/completions'),
       headers: {
@@ -301,23 +320,89 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  String _formatAnalysisResult(Map<String, dynamic> analysisResult) {
-    // Extract and format the analysis result from GPT API
-    return analysisResult['choices'][0]['message']['content'];
+  String _formatAnalysisResult(String analysisResult) {
+    // İçeriği kontrol et ve özel karakterleri doğru işlediğinden emin ol
+    List<String> lines = analysisResult.split('\n');
+    String formattedContent = '';
+    for (String line in lines) {
+      if (line.contains('|')) {
+        List<String> parts = line.split('|');
+        if (parts.length > 1) {
+          formattedContent += '${parts[0].trim()}: ${parts[1].trim()}\n';
+        }
+      } else {
+        formattedContent += line.trim() + '\n';
+      }
+    }
+    return formattedContent;
   }
 
-  void _navigateToMasrafDetayPage(
-      BuildContext context, String analysisResult, String imagePath) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FaturaDetayPage(
-          analysisResult: '',
-          imagePath: '',
-          invoiceData: {},
-        ),
-      ),
-    );
+  Map<String, dynamic> _parseOcrResults(String ocrResult) {
+    // OCR sonucunu belirli alanlara ayırma
+    List<String> lines = ocrResult.split('\n');
+    Map<String, dynamic> parsedData = {};
+
+    for (String line in lines) {
+      if (line.contains('Şirket Adı')) {
+        parsedData['companyName'] = _extractValue(line);
+      } else if (line.contains('Adres')) {
+        parsedData['address'] = _extractValue(line);
+      } else if (line.contains('Vergi Dairesi')) {
+        parsedData['taxOffice'] = _extractValue(line);
+      } else if (line.contains('Vergi Numarası')) {
+        parsedData['taxNumber'] = _extractValue(line);
+      } else if (line.contains('Fiş Tarihi')) {
+        parsedData['receiptDate'] = _extractValue(line);
+      } else if (line.contains('Saat')) {
+        parsedData['receiptTime'] = _extractValue(line);
+      } else if (line.contains('Fiş No')) {
+        parsedData['receiptNumber'] = _extractValue(line);
+      } else if (line.contains('KDV Oranı')) {
+        parsedData['vatRate'] = _extractValue(line);
+      } else if (line.contains('KDV Tutarı')) {
+        parsedData['vatAmount'] = _extractValue(line);
+      } else if (line.contains('Toplam Tutar')) {
+        parsedData['totalAmount'] = _extractValue(line);
+      } else if (line.contains('Ödeme Yöntemi')) {
+        parsedData['paymentMethod'] = _extractValue(line);
+      } else if (line.contains('Satın Alınan Ürünler')) {
+        parsedData['purchasedItems'] = _parsePurchasedItems(lines);
+      }
+    }
+
+    return parsedData;
+  }
+
+  String _extractValue(String line) {
+    // Satırın değerini çıkarmak için yardımcı bir fonksiyon
+    return line.split(':')[1].trim();
+  }
+
+  List<Map<String, dynamic>> _parsePurchasedItems(List<String> lines) {
+    List<Map<String, dynamic>> items = [];
+    bool isItemSection = false;
+
+    for (String line in lines) {
+      if (line.contains('Satın Alınan Ürünler')) {
+        isItemSection = true;
+        continue;
+      }
+      if (isItemSection) {
+        if (line.isEmpty) {
+          break; // Son itemi bulduktan sonra çık
+        }
+        List<String> itemDetails = line.split(',');
+        if (itemDetails.length >= 3) {
+          items.add({
+            'itemName': itemDetails[0].trim(),
+            'itemVatRate': itemDetails[1].trim(),
+            'itemAmount': itemDetails[2].trim(),
+          });
+        }
+      }
+    }
+
+    return items;
   }
 
   @override
@@ -439,7 +524,7 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Container(
           height: 60,
           padding: EdgeInsets.symmetric(horizontal: 30),
-          child: Row(
+          child: const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Icon(Icons.home, color: Color(0xFF162dd4)),
