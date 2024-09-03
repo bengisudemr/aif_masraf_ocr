@@ -6,11 +6,11 @@ class Loginpage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         backgroundColor: Colors.white,
-        body: const LoginScreen(),
+        body: LoginScreen(),
       ),
     );
   }
@@ -27,9 +27,9 @@ class LoginScreen extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFF162dd4),
-              borderRadius: const BorderRadius.only(
+            decoration: const BoxDecoration(
+              color: Color(0xFF162dd4),
+              borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(70),
                 bottomRight: Radius.circular(70),
               ),
@@ -38,14 +38,14 @@ class LoginScreen extends StatelessWidget {
             child: Align(
               alignment: Alignment.bottomCenter,
               child: Transform.translate(
-                offset: Offset(0, 100),
+                offset: const Offset(0, 100),
                 child: Container(
                   padding: const EdgeInsets.all(10.0),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10.0),
                   ),
-                  child: Image(
+                  child: const Image(
                     image: AssetImage('assets/images/aif-logo.jpg'),
                     width: 100,
                   ),
@@ -63,7 +63,7 @@ class LoginScreen extends StatelessWidget {
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.email),
                     hintText: 'E-Posta',
-                    hintStyle: TextStyle(
+                    hintStyle: const TextStyle(
                       color: Colors.grey,
                       fontWeight: FontWeight.w300,
                     ),
@@ -78,7 +78,7 @@ class LoginScreen extends StatelessWidget {
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.lock),
                     hintText: 'Şifre',
-                    hintStyle: TextStyle(
+                    hintStyle: const TextStyle(
                       color: Colors.grey,
                       fontWeight: FontWeight.w300,
                     ),

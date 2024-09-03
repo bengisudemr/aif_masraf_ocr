@@ -1,25 +1,24 @@
-import 'package:aif_masraf_ocr/faturadetay.dart';
-import 'package:aif_masraf_ocr/loginpage.dart';
-import 'package:aif_masraf_ocr/manuelmasrafdetaypage.dart';
-import 'package:aif_masraf_ocr/services/api_Service.dart';
-import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'dart:convert'; // JSON dönüşümü için
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
+import 'package:aif_masraf_ocr/manuelmasrafdetaypage.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart'; // HTTP istekleri için
 
 void main() {
   runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: Color(0xFF162dd4),
+        primaryColor: const Color(0xFF162dd4),
         textTheme: const TextTheme(
           bodyLarge: TextStyle(color: Color(0xFF162dd4)),
           bodyMedium: TextStyle(color: Color(0xFF162dd4)),
@@ -33,102 +32,46 @@ class MyApp extends StatelessWidget {
           textTheme: ButtonTextTheme.primary,
         ),
         cardTheme: CardTheme(
-          color: Color(0xFF162dd4).withOpacity(0.1),
+          color: const Color(0xFF162dd4).withOpacity(0.1),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
         colorScheme: ColorScheme.fromSwatch(
           primarySwatch: Colors.blue,
-          accentColor: Color(0xFF162dd4),
+          accentColor: const Color(0xFF162dd4),
         )
-            .copyWith(secondary: Color(0xFF162dd4))
-            .copyWith(background: Colors.grey[100]),
+            .copyWith(secondary: const Color(0xFF162dd4))
+            .copyWith(surface: Colors.grey[100]),
       ),
-      home: Loginpage(),
+      home: const MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key});
+
   @override
   _MyHomePageState createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
   List<String> invoices = [];
-  List<String> titles = []; // List to store titles from OCR results
+  List<String> titles = []; // OCR sonuçlarından başlıkları depolamak için liste
 
   Future<void> _pickImageFromCamera() async {
-    final ImagePicker _picker = ImagePicker();
+    final ImagePicker picker = ImagePicker();
     final XFile? pickedFile =
-        await _picker.pickImage(source: ImageSource.camera);
+        await picker.pickImage(source: ImageSource.camera);
 
     if (pickedFile != null) {
       final filePath = pickedFile.path;
-      if (filePath != null) {
-        final ocrResult = await _sendToGoogleVisionApi(filePath);
-        await _analyzeWithGPTAndNavigate(ocrResult, filePath);
-      } else {
-        print('File path is null.');
-      }
+      final ocrResult = await _sendToGoogleVisionApi(filePath);
+      await _splitJsonAndAnalyze(ocrResult, filePath);
     } else {
       print('No image selected.');
     }
-  }
-
-  void _showFloatingMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return Container(
-          color: Colors.transparent,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(Icons.photo_library, color: Colors.white),
-                title: Text('Galeri', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  _selectFromGallery(context);
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.file_upload, color: Colors.white),
-                title:
-                    Text('Dosya yükle', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  _uploadFile(context);
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.format_align_center, color: Colors.white),
-                title: Text('Manuel', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ManuelMasrafFormPage(),
-                    ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.camera, color: Colors.white),
-                title: Text('Kamera', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  _pickImageFromCamera(); // Kamera ile resim çekmek için eklenen fonksiyon
-                  Navigator.pop(context);
-                },
-              )
-            ],
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _selectFromGallery(BuildContext context) async {
@@ -142,7 +85,7 @@ class _MyHomePageState extends State<MyHomePage> {
       final filePath = file.path;
       if (filePath != null) {
         final ocrResult = await _sendToGoogleVisionApi(filePath);
-        await _analyzeWithGPTAndNavigate(ocrResult, filePath);
+        await _splitJsonAndAnalyze(ocrResult, filePath);
       } else {
         print('File path is null.');
       }
@@ -160,7 +103,7 @@ class _MyHomePageState extends State<MyHomePage> {
       final file = result.files.single;
       if (file.path != null) {
         final ocrResult = await _sendToGoogleVisionApi(file.path!);
-        await _analyzeWithGPTAndNavigate(ocrResult, file.path!);
+        await _splitJsonAndAnalyze(ocrResult, file.path!);
       } else {
         print('File path is null.');
       }
@@ -175,10 +118,8 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<String> _sendToGoogleVisionApi(String filePath) async {
-    const apiKey =
-        'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s'; // API anahtarınızı buraya ekleyin.
-    final url =
-        'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
+    const apiKey = 'YOUR_GOOGLE_VISION_API_KEY';
+    const url = 'https://vision.googleapis.com/v1/images:annotate?key=$apiKey';
 
     try {
       final base64Image = await _convertImageToBase64(filePath);
@@ -198,9 +139,6 @@ class _MyHomePageState extends State<MyHomePage> {
         }),
       );
 
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
-
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         final extractedText = jsonResponse['responses']?[0]
@@ -217,44 +155,30 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  /// Bu fonksiyon karakter hatalarını düzeltmek için manuel olarak müdahale eder
-  String _fixMalformedCharacters(String input) {
-    // Türkçe karakterleri manuel olarak düzeltiyoruz
-    return input
-        .replaceAll('Ã§', 'ç')
-        .replaceAll('Ã¶', 'ö')
-        .replaceAll('Ã¼', 'ü')
-        .replaceAll('ÅŸ', 'ş')
-        .replaceAll('Ä±', 'ı')
-        .replaceAll('ÄŸ', 'ğ')
-        .replaceAll('Ã‡', 'Ç')
-        .replaceAll('Ã–', 'Ö')
-        .replaceAll('Ãœ', 'Ü')
-        .replaceAll('Åž', 'Ş')
-        .replaceAll('Ä°', 'İ')
-        .replaceAll('ÄŸ', 'ğ');
+  Future<void> _splitJsonAndAnalyze(String ocrResult, String filePath) async {
+    int middleIndex = ocrResult.length ~/ 2;
+    String jsonPart1 = ocrResult.substring(0, middleIndex);
+    String jsonPart2 = ocrResult.substring(middleIndex);
+
+    await _analyzeWithGPTAndNavigate(filePath, jsonPart1, jsonPart2);
   }
 
   Future<void> _analyzeWithGPTAndNavigate(
-      String ocrResult, String filePath) async {
+      String filePath, String jsonPart1, String jsonPart2) async {
     try {
-      final analysisResult =
-          await fetchGPTAnalysis(ocrResult); // GPT Analizini al
+      final analysisResultPart1 = await fetchGPTAnalysisPart1(jsonPart1);
+      final analysisResultPart2 = await fetchGPTAnalysisPart2(jsonPart2);
 
-      // OpenAI'dan gelen sonucu UTF-8 olarak decode et
-      final utf8Result =
-          _decodeUtf8(analysisResult['choices'][0]['message']['content']);
+      final combinedResult = '$analysisResultPart1\n\n$analysisResultPart2';
 
-      // Gelen yanıtı manuel olarak düzeltmek
-      final fixedResult = _fixMalformedCharacters(utf8Result);
-
+      // Sayfaya yönlendirme
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => FaturaDetayPage(
-            analysisResult: _formatAnalysisResult(fixedResult),
             imagePath: filePath,
-            invoiceData: _parseOcrResults(ocrResult),
+            analysisResult: combinedResult,
+            invoiceData: _extractInvoiceData(combinedResult),
           ),
         ),
       );
@@ -263,47 +187,31 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  String _decodeUtf8(String encodedText) {
-    // Metni UTF-8 olarak decode edin
-    try {
-      return utf8.decode(encodedText.runes.toList(), allowMalformed: true);
-    } catch (e) {
-      print("UTF-8 decoding error: $e");
-      return encodedText; // Hata durumunda orijinal metni döndür
-    }
-  }
+  Future<String> fetchGPTAnalysisPart1(String jsonPart1) async {
+    const apiKey = 'YOUR_OPENAI_API_KEY';
 
-  Future<Map<String, dynamic>> fetchGPTAnalysis(String ocrText) async {
-    const apiKey =
-        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A';
     final response = await http.post(
       Uri.parse('https://api.openai.com/v1/chat/completions'),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': apiKey,
+        'Authorization': 'Bearer $apiKey',
       },
       body: jsonEncode({
         'model': 'gpt-3.5-turbo',
         'messages': [
           {
             'role': 'user',
-            'content':
-                '''Aşağıdaki metinden fiş bilgilerini analiz et ve tablo olarak verama utf-8 karakterlerini bozmadan yap:
-          
-          $ocrText
-          
-          ŞİRKET ADI:
-          ADRES:
-          VERGİ DAİRESİ:
-          VERGİ NUMARASI:
-          FİŞ TARİHİ:
-          SAAT:
-          FİŞ NO:
-          KDV ORANI:
-          KDV TUTARI:
-          TOPLAM TUTAR:
-          ÖDEME YÖNTEMİ:
-          SATIN ALINAN ÜRÜNLER: (Ürün Adı, KDV Oranı, Tutar)
+            'content': '''
+            Aşağıdaki fiş bilgilerini analiz et ve tablo olarak ver:
+            $jsonPart1
+            
+            ŞİRKET ADI:
+            ADRES:
+            VERGİ DAİRESİ:
+            VERGİ NUMARASI:
+            FİŞ TARİHİ:
+            SAAT:
+            FİŞ NO:
           '''
           }
         ],
@@ -312,97 +220,80 @@ class _MyHomePageState extends State<MyHomePage> {
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      return data['choices'][0]['message']['content'].trim();
     } else {
-      print('Error: ${response.statusCode}');
-      print('Response body: ${response.body}');
       throw Exception('Failed to fetch data from GPT');
     }
   }
 
-  String _formatAnalysisResult(String analysisResult) {
-    // İçeriği kontrol et ve özel karakterleri doğru işlediğinden emin ol
-    List<String> lines = analysisResult.split('\n');
-    String formattedContent = '';
-    for (String line in lines) {
-      if (line.contains('|')) {
-        List<String> parts = line.split('|');
-        if (parts.length > 1) {
-          formattedContent += '${parts[0].trim()}: ${parts[1].trim()}\n';
-        }
-      } else {
-        formattedContent += line.trim() + '\n';
-      }
+  Future<String> fetchGPTAnalysisPart2(String jsonPart2) async {
+    const apiKey = 'YOUR_OPENAI_API_KEY';
+
+    final response = await http.post(
+      Uri.parse('https://api.openai.com/v1/chat/completions'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $apiKey',
+      },
+      body: jsonEncode({
+        'model': 'gpt-3.5-turbo',
+        'messages': [
+          {
+            'role': 'user',
+            'content': '''
+            Aşağıdaki fiş bilgilerini analiz et ve tablo olarak ver:
+            $jsonPart2
+            
+            KDV ORANI:
+            KDV TUTARI:
+            TOPLAM TUTAR:
+            ÖDEME YÖNTEMİ:
+            SATIN ALINAN ÜRÜNLER: (Ürün Adı, KDV Oranı, Tutar)
+          '''
+          }
+        ],
+        'max_tokens': 1000,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      return data['choices'][0]['message']['content'].trim();
+    } else {
+      throw Exception('Failed to fetch data from GPT');
     }
-    return formattedContent;
   }
 
-  Map<String, dynamic> _parseOcrResults(String ocrResult) {
-    // OCR sonucunu belirli alanlara ayırma
-    List<String> lines = ocrResult.split('\n');
-    Map<String, dynamic> parsedData = {};
+  Map<String, dynamic> _extractInvoiceData(String combinedResult) {
+    final lines = combinedResult.split('\n');
+    final Map<String, dynamic> invoiceData = {};
 
-    for (String line in lines) {
-      if (line.contains('Şirket Adı')) {
-        parsedData['companyName'] = _extractValue(line);
-      } else if (line.contains('Adres')) {
-        parsedData['address'] = _extractValue(line);
-      } else if (line.contains('Vergi Dairesi')) {
-        parsedData['taxOffice'] = _extractValue(line);
-      } else if (line.contains('Vergi Numarası')) {
-        parsedData['taxNumber'] = _extractValue(line);
-      } else if (line.contains('Fiş Tarihi')) {
-        parsedData['receiptDate'] = _extractValue(line);
-      } else if (line.contains('Saat')) {
-        parsedData['receiptTime'] = _extractValue(line);
-      } else if (line.contains('Fiş No')) {
-        parsedData['receiptNumber'] = _extractValue(line);
-      } else if (line.contains('KDV Oranı')) {
-        parsedData['vatRate'] = _extractValue(line);
-      } else if (line.contains('KDV Tutarı')) {
-        parsedData['vatAmount'] = _extractValue(line);
-      } else if (line.contains('Toplam Tutar')) {
-        parsedData['totalAmount'] = _extractValue(line);
-      } else if (line.contains('Ödeme Yöntemi')) {
-        parsedData['paymentMethod'] = _extractValue(line);
-      } else if (line.contains('Satın Alınan Ürünler')) {
-        parsedData['purchasedItems'] = _parsePurchasedItems(lines);
-      }
-    }
-
-    return parsedData;
-  }
-
-  String _extractValue(String line) {
-    // Satırın değerini çıkarmak için yardımcı bir fonksiyon
-    return line.split(':')[1].trim();
-  }
-
-  List<Map<String, dynamic>> _parsePurchasedItems(List<String> lines) {
-    List<Map<String, dynamic>> items = [];
-    bool isItemSection = false;
-
-    for (String line in lines) {
-      if (line.contains('Satın Alınan Ürünler')) {
-        isItemSection = true;
-        continue;
-      }
-      if (isItemSection) {
-        if (line.isEmpty) {
-          break; // Son itemi bulduktan sonra çık
-        }
-        List<String> itemDetails = line.split(',');
-        if (itemDetails.length >= 3) {
-          items.add({
-            'itemName': itemDetails[0].trim(),
-            'itemVatRate': itemDetails[1].trim(),
-            'itemAmount': itemDetails[2].trim(),
-          });
-        }
+    for (final line in lines) {
+      if (line.contains('ŞİRKET ADI:')) {
+        invoiceData['sirketAdi'] = line.split(':')[1].trim();
+      } else if (line.contains('ADRES:')) {
+        invoiceData['adres'] = line.split(':')[1].trim();
+      } else if (line.contains('VERGİ DAİRESİ:')) {
+        invoiceData['vergiDairesi'] = line.split(':')[1].trim();
+      } else if (line.contains('VERGİ NUMARASI:')) {
+        invoiceData['vergiNumarasi'] = line.split(':')[1].trim();
+      } else if (line.contains('FİŞ TARİHİ:')) {
+        invoiceData['fisTarihi'] = line.split(':')[1].trim();
+      } else if (line.contains('FİŞ NO:')) {
+        invoiceData['fisNo'] = line.split(':')[1].trim();
+      } else if (line.contains('KDV ORANI:')) {
+        invoiceData['kdvOrani'] = line.split(':')[1].trim();
+      } else if (line.contains('KDV TUTARI:')) {
+        invoiceData['kdvTutari'] = line.split(':')[1].trim();
+      } else if (line.contains('TOPLAM TUTAR:')) {
+        invoiceData['toplamTutar'] = line.split(':')[1].trim();
+      } else if (line.contains('ÖDEME YÖNTEMİ:')) {
+        invoiceData['odemeYontemi'] = line.split(':')[1].trim();
       }
     }
 
-    return items;
+    return invoiceData;
   }
 
   @override
@@ -410,29 +301,29 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: Color(0xFF162dd4),
+        backgroundColor: const Color(0xFF162dd4),
         elevation: 0,
         toolbarHeight: 100,
         title: Row(
           children: [
             Container(
-              padding: EdgeInsets.all(2),
+              padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 1),
               ),
-              child: CircleAvatar(
+              child: const CircleAvatar(
                 radius: 24,
                 backgroundColor: Colors.white,
                 child: Icon(Icons.person, color: Color(0xFF162dd4), size: 30),
               ),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 RichText(
-                  text: TextSpan(
+                  text: const TextSpan(
                     style: TextStyle(color: Colors.white, fontSize: 20),
                     children: <TextSpan>[
                       TextSpan(
@@ -460,7 +351,7 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Column(
         children: [
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Expanded(
             child: invoices.isNotEmpty
                 ? ListView.builder(
@@ -476,7 +367,7 @@ class _MyHomePageState extends State<MyHomePage> {
                               titles.isNotEmpty && index < titles.length
                                   ? titles[index]
                                   : 'Invoice ${index + 1}',
-                              style: TextStyle(
+                              style: const TextStyle(
                                   color: Color(0xFF162dd4),
                                   fontWeight: FontWeight.bold),
                             ),
@@ -485,9 +376,9 @@ class _MyHomePageState extends State<MyHomePage> {
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => FaturaDetayPage(
-                                    invoiceData: {},
                                     imagePath: '',
                                     analysisResult: '',
+                                    invoiceData: {},
                                   ),
                                 ),
                               );
@@ -497,7 +388,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       );
                     },
                   )
-                : Center(
+                : const Center(
                     child: Text(
                       'Henüz masraf girişi yapılmadı',
                       style: TextStyle(
@@ -512,18 +403,18 @@ class _MyHomePageState extends State<MyHomePage> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showFloatingMenu(context),
-        child: Icon(Icons.add, color: Colors.white),
-        backgroundColor: Color(0xFF162dd4),
+        backgroundColor: const Color(0xFF162dd4),
         elevation: 4,
+        child: Icon(Icons.add, color: Colors.white),
       ),
       bottomNavigationBar: BottomAppBar(
-        shape: CircularNotchedRectangle(),
+        shape: const CircularNotchedRectangle(),
         notchMargin: 10,
         color: Colors.white,
         elevation: 20,
         child: Container(
           height: 60,
-          padding: EdgeInsets.symmetric(horizontal: 30),
+          padding: const EdgeInsets.symmetric(horizontal: 30),
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -536,6 +427,274 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showFloatingMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          color: Colors.transparent,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.white),
+                title:
+                    const Text('Galeri', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  _selectFromGallery(context);
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.file_upload, color: Colors.white),
+                title: const Text('Dosya yükle',
+                    style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  _uploadFile(context);
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.format_align_center, color: Colors.white),
+                title:
+                    const Text('Manuel', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ManuelMasrafFormPage(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera, color: Colors.white),
+                title:
+                    const Text('Kamera', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  _pickImageFromCamera();
+                  Navigator.pop(context);
+                },
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class FaturaDetayPage extends StatefulWidget {
+  final String imagePath;
+  final String analysisResult;
+  final Map<String, dynamic> invoiceData;
+
+  FaturaDetayPage({
+    required this.imagePath,
+    required this.analysisResult,
+    required this.invoiceData,
+  });
+
+  @override
+  _FaturaDetayPageState createState() => _FaturaDetayPageState();
+}
+
+class _FaturaDetayPageState extends State<FaturaDetayPage> {
+  late Map<String, String> invoiceDetails;
+  late List<Map<String, String>> productDetails;
+
+  @override
+  void initState() {
+    super.initState();
+    invoiceDetails = _extractInvoiceDetails(widget.invoiceData);
+    productDetails = _extractProductDetails(widget.analysisResult);
+  }
+
+  Map<String, String> _extractInvoiceDetails(Map<String, dynamic> invoiceData) {
+    return {
+      "Şirket Adı": invoiceData["sirketAdi"] ?? "-",
+      "Adres": invoiceData["adres"] ?? "-",
+      "Vergi Dairesi": invoiceData["vergiDairesi"] ?? "-",
+      "Vergi Numarası": invoiceData["vergiNumarasi"] ?? "-",
+      "Fiş Tarihi": invoiceData["fisTarihi"] ?? "-",
+      "Saat": invoiceData["saat"] ?? "-",
+      "Fiş No": invoiceData["fisNo"] ?? "-",
+      "KDV Oranı": invoiceData["kdvOrani"] ?? "-",
+      "KDV Tutarı": invoiceData["kdvTutari"] ?? "-",
+      "Toplam Tutar": invoiceData["toplamTutar"] ?? "-",
+      "Ödeme Yöntemi": invoiceData["odemeYontemi"] ?? "-",
+    };
+  }
+
+  List<Map<String, String>> _extractProductDetails(String analysisResult) {
+    final lines = analysisResult.split('\n');
+    final List<Map<String, String>> products = [];
+    bool foundProducts = false;
+
+    for (var line in lines) {
+      if (foundProducts) {
+        final parts = line.split('|');
+        if (parts.length >= 3) {
+          products.add({
+            'urunAdi': parts[0].trim(),
+            'kdvOrani': parts[1].trim(),
+            'tutar': parts[2].trim(),
+          });
+        }
+      } else if (line.contains('SATIN ALINAN ÜRÜNLER')) {
+        foundProducts = true;
+      }
+    }
+
+    return products;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Fatura Detayı'),
+        backgroundColor: Color(0xFF162dd4),
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.imagePath.isNotEmpty)
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey, width: 1.0),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: Image.file(
+                    File(widget.imagePath),
+                    fit: BoxFit.cover,
+                    height: 300,
+                    width: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Text(
+                          'Görsel yüklenirken bir hata oluştu',
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            SizedBox(height: 20),
+            _buildInvoiceInfoTable(),
+            SizedBox(height: 20),
+            Text(
+              'Satın Alınan Ürünler',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            SizedBox(height: 10),
+            _buildProductsTable(),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                // Kaydetme işlemi
+              },
+              child: Text('Kaydet'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInvoiceInfoTable() {
+    return Table(
+      border: TableBorder.all(color: Colors.grey),
+      columnWidths: const {
+        0: FlexColumnWidth(4),
+        1: FlexColumnWidth(6),
+      },
+      children: invoiceDetails.entries.map((entry) {
+        return TableRow(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(entry.key,
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(entry.value),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildProductsTable() {
+    return Table(
+      border: TableBorder.all(color: Colors.grey),
+      columnWidths: const {
+        0: FlexColumnWidth(7),
+        1: FlexColumnWidth(2),
+        2: FlexColumnWidth(3),
+      },
+      children: [
+        TableRow(
+          decoration: BoxDecoration(color: Colors.grey[300]),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'Ürün Adı',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'KDV Oranı',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'Tutar',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        ...productDetails.map((product) {
+          return TableRow(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(product['urunAdi'] ?? '-'),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(product['kdvOrani'] ?? '-'),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(product['tutar'] ?? '-'),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
     );
   }
 }

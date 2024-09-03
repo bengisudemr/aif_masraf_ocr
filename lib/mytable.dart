@@ -8,11 +8,13 @@ class DynamicTablePage extends StatelessWidget {
     // Ensure all rows have the same number of columns
   ];
 
+  DynamicTablePage({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Dynamic Table Example'),
+        title: const Text('Dynamic Table Example'),
       ),
       body: Center(
         child: Table(
@@ -22,7 +24,7 @@ class DynamicTablePage extends StatelessWidget {
               children: row.map((cell) {
                 return TableCell(
                     child: Padding(
-                  padding: EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.all(8.0),
                   child: Text(cell),
                 ));
               }).toList(),

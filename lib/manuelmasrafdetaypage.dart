@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 class ManuelMasrafFormPage extends StatefulWidget {
+  const ManuelMasrafFormPage({super.key});
+
   @override
   _ManuelMasrafFormPageState createState() => _ManuelMasrafFormPageState();
 }
@@ -20,19 +22,19 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
   String? _vatAmount;
   String? _totalAmount;
   String? _paymentMethod;
-  List<Map<String, String>> _products = [];
+  final List<Map<String, String>> _products = [];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back),
           onPressed: () {
             Navigator.of(context).pop();
           },
         ),
-        title: Text(
+        title: const Text(
           "Manuel Masraf Girişi",
           style: TextStyle(
             fontSize: 18,
@@ -44,10 +46,10 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
             onPressed: () {
               // Tahsis butonuna tıklama işlevi
             },
-            child: Text("Tahsis"),
             style: TextButton.styleFrom(
               foregroundColor: Colors.blue,
             ),
+            child: Text("Tahsis"),
           ),
           TextButton(
             onPressed: () {
@@ -58,10 +60,10 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
                 Navigator.pop(context);
               }
             },
-            child: Text("Kaydet"),
             style: TextButton.styleFrom(
               foregroundColor: Colors.blue,
             ),
+            child: Text("Kaydet"),
           ),
         ],
       ),
@@ -78,62 +80,62 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
                   height: 300,
                 ),
               ),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               _buildTextFormField(
                 label: 'Şirket Adı',
                 onSaved: (value) => _companyName = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'Adres',
                 onSaved: (value) => _address = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'Vergi Dairesi',
                 onSaved: (value) => _taxOffice = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'Vergi Numarası',
                 onSaved: (value) => _taxNumber = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'Fiş Tarihi',
                 onSaved: (value) => _receiptDate = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'Saat',
                 onSaved: (value) => _time = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'Fiş No',
                 onSaved: (value) => _receiptNumber = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'KDV Oranı',
                 onSaved: (value) => _vatRate = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'KDV Tutarı',
                 onSaved: (value) => _vatAmount = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'Toplam Tutar',
                 onSaved: (value) => _totalAmount = value,
               ),
-              Divider(),
+              const Divider(),
               _buildTextFormField(
                 label: 'Ödeme Yöntemi',
                 onSaved: (value) => _paymentMethod = value,
               ),
-              Divider(),
+              const Divider(),
               _buildProductList(),
             ],
           ),
@@ -149,7 +151,7 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
       child: TextFormField(
         decoration: InputDecoration(
           labelText: label,
-          border: OutlineInputBorder(),
+          border: const OutlineInputBorder(),
         ),
         onSaved: onSaved,
         validator: (value) =>
@@ -162,7 +164,7 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Satın Alınan Ürünler',
+        const Text('Satın Alınan Ürünler',
             style: TextStyle(fontWeight: FontWeight.bold)),
         ..._products.map((product) {
           return Column(
@@ -171,10 +173,10 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
               _buildTextRow("Ürün Adı", product['name'] ?? ''),
               _buildTextRow("KDV Oranı", product['vatRate'] ?? ''),
               _buildTextRow("Tutar", product['amount'] ?? ''),
-              Divider(),
+              const Divider(),
             ],
           );
-        }).toList(),
+        }),
       ],
     );
   }
@@ -185,11 +187,11 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: 16)),
+          Text(label, style: const TextStyle(fontSize: 16)),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(fontSize: 16),
+              style: const TextStyle(fontSize: 16),
               textAlign: TextAlign.right,
             ),
           ),

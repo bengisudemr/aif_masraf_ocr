@@ -1,146 +1,99 @@
+import 'dart:convert'; // JSON dönüşümü için
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:http/http.dart' as http; // HTTP istekleri için
 
 class FaturaDetayPage extends StatefulWidget {
   final String imagePath;
+  final String analysisResult;
+  final Map<String, dynamic> invoiceData;
 
-  FaturaDetayPage(
-      {required this.imagePath,
-      required String analysisResult,
-      required Map<String, dynamic> invoiceData});
+  FaturaDetayPage({
+    required this.imagePath,
+    required this.analysisResult,
+    required this.invoiceData,
+  });
 
   @override
   _FaturaDetayPageState createState() => _FaturaDetayPageState();
 }
 
 class _FaturaDetayPageState extends State<FaturaDetayPage> {
-  String formattedResult = 'Yükleniyor...';
-  bool isLoading = true;
+  late List<String> invoiceLines;
+  late List<Map<String, String>> productDetails;
 
   @override
   void initState() {
     super.initState();
-    _processImage(widget.imagePath);
+    invoiceLines = _parseGPTOutput(widget.analysisResult);
+    productDetails = _parseProducts(invoiceLines);
   }
 
-  Future<void> _processImage(String filePath) async {
-    try {
-      // Google Vision API ile OCR yap
-      final ocrText = await _sendToGoogleVisionApi(filePath);
-
-      // OCR sonucunu GPT-3.5-turbo'ya gönderip analiz et
-      final analysisResult = await _analyzeWithGPT(ocrText);
-
-      setState(() {
-        formattedResult = analysisResult;
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        formattedResult = 'Bir hata oluştu: $e';
-        isLoading = false;
-      });
-    }
+  List<String> _parseGPTOutput(String gptOutput) {
+    return gptOutput.split('\n');
   }
 
-  Future<String> _sendToGoogleVisionApi(String filePath) async {
-    const apiKey =
-        'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s'; // Google Vision API anahtarınızı buraya ekleyin
-    final url =
-        'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
+  List<Map<String, String>> _parseProducts(List<String> lines) {
+    List<Map<String, String>> products = [];
+    bool foundProducts = false;
 
-    try {
-      final base64Image = await _convertImageToBase64(filePath);
-
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "requests": [
-            {
-              "image": {"content": base64Image},
-              "features": [
-                {"type": "TEXT_DETECTION"}
-              ]
-            }
-          ]
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        final extractedText = jsonResponse['responses']?[0]
-                ['fullTextAnnotation']?['text'] ??
-            'No text found';
-        return extractedText;
-      } else {
-        throw Exception(
-            'Failed to get OCR result. Status code: ${response.statusCode}');
+    for (var line in lines) {
+      if (foundProducts) {
+        final parts = line.split('|');
+        if (parts.length >= 3) {
+          products.add({
+            'urunAdi': parts[0].trim(),
+            'kdvOrani': parts[1].trim(),
+            'tutar': parts[2].trim(),
+          });
+        }
+      } else if (line.contains('SATIN ALINAN ÜRÜNLER')) {
+        foundProducts = true;
       }
-    } catch (e) {
-      throw Exception('Error in _sendToGoogleVisionApi: $e');
     }
+
+    return products;
   }
 
-  Future<String> _analyzeWithGPT(String ocrResult) async {
-    const apiKey =
-        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A'; // OpenAI API anahtarınızı buraya ekleyin
-    final url = Uri.parse('https://api.openai.com/v1/chat/completions');
+  Future<void> _saveInvoice() async {
+    // Örnek JSON verisi
+    final Map<String, dynamic> data = {
+      "sirketAdi": widget.invoiceData["sirketAdi"],
+      "adres": widget.invoiceData["adres"],
+      "vergiDairesi": widget.invoiceData["vergiDairesi"],
+      "vergiNumarasi": widget.invoiceData["vergiNumarasi"],
+      "fisTarihi": widget.invoiceData["fisTarihi"],
+      "fisNo": widget.invoiceData["fisNo"],
+    };
 
     try {
       final response = await http.post(
-        url,
+        Uri.parse('https://masrafapi.aifdigital.com.tr/api/Masraf/create'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization':
-              'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A',
         },
-        body: jsonEncode({
-          'model': 'gpt-3.5-turbo',
-          'messages': [
-            {
-              'role': 'user',
-              'content':
-                  '''Aşağıdaki metinden fiş bilgilerini analiz et ve tablo olarak ver:
-                
-                ŞİRKET ADI:
-                ADRES:
-                VERGİ DAİRESİ:
-                VERGİ NUMARASI:
-                FİŞ TARİHİ:
-                SAAT:
-                FİŞ NO:
-                KDV ORANI:
-                KDV TUTARI:
-                TOPLAM TUTAR:
-                ÖDEME YÖNTEMİ:
-                SATIN ALINAN ÜRÜNLER: (Ürün Adı, KDV Oranı, Tutar)
-
-                Lütfen sonucu flutter tablosu olarak ver ve ürünleri ayrı bir tabloda listelerken, her satırda Ürün Adı, KDV Oranı ve Tutar'ı göster:
-                \n\n$ocrResult'''
-            },
-          ],
-          'max_tokens': 1500,
-        }),
+        body: jsonEncode(data),
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['choices'][0]['message']['content'].trim();
+        // Başarılı kaydetme işlemi
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fatura başarıyla kaydedildi.')),
+        );
       } else {
-        throw Exception(
-            'Failed to analyze with GPT. Status code: ${response.statusCode}');
+        // Hata durumunda
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('Fatura kaydedilemedi. Hata: ${response.statusCode}')),
+        );
       }
     } catch (e) {
-      throw Exception('Error in _analyzeWithGPT: $e');
+      // Ağ hatası vb.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fatura kaydedilemedi. Hata: $e')),
+      );
     }
-  }
-
-  Future<String> _convertImageToBase64(String filePath) async {
-    final bytes = await File(filePath).readAsBytes();
-    return base64Encode(bytes);
   }
 
   @override
@@ -155,55 +108,149 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Fotoğrafın gösterimi
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey, width: 1.0),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8.0),
-                child: Image.file(
-                  File(widget.imagePath),
-                  fit: BoxFit.cover,
-                  height: 300,
-                  width: double.infinity,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Center(
-                      child: Text(
-                        'Görsel yüklenirken bir hata oluştu',
-                        textAlign: TextAlign.center,
-                      ),
-                    );
-                  },
+            if (widget.imagePath.isNotEmpty)
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey, width: 1.0),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: Image.file(
+                    File(widget.imagePath),
+                    fit: BoxFit.cover,
+                    height: 300,
+                    width: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Text(
+                          'Görsel yüklenirken bir hata oluştu',
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
             SizedBox(height: 20),
-            // OCR ve GPT sonuçlarının gösterimi
-            isLoading
-                ? Center(child: CircularProgressIndicator())
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'GPT-3.5-turbo Sonucu:',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Colors.black,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        formattedResult,
-                        style: TextStyle(fontSize: 16, color: Colors.black),
-                      ),
-                    ],
-                  ),
+            _buildInvoiceInfoTable(),
+            SizedBox(height: 20),
+            Text(
+              'Satın Alınan Ürünler',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            SizedBox(height: 10),
+            _buildProductsTable(),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _saveInvoice,
+              child: Text('Kaydet'),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildInvoiceInfoTable() {
+    return Table(
+      border: TableBorder.all(color: Colors.grey),
+      columnWidths: const {
+        0: FlexColumnWidth(4),
+        1: FlexColumnWidth(6),
+      },
+      children: [
+        _buildTableRow("Şirket Adı", widget.invoiceData["sirketAdi"]),
+        _buildTableRow("Adres", widget.invoiceData["adres"]),
+        _buildTableRow("Vergi Dairesi", widget.invoiceData["vergiDairesi"]),
+        _buildTableRow("Vergi Numarası", widget.invoiceData["vergiNumarasi"]),
+        _buildTableRow("Fiş Tarihi", widget.invoiceData["fisTarihi"]),
+        _buildTableRow("Saat", widget.invoiceData["saat"]),
+        _buildTableRow("Fiş No", widget.invoiceData["fisNo"]),
+        _buildTableRow("KDV Oranı", widget.invoiceData["kdvOrani"]),
+        _buildTableRow("KDV Tutarı", widget.invoiceData["kdvTutari"]),
+        _buildTableRow("Toplam Tutar", widget.invoiceData["toplamTutar"]),
+        _buildTableRow("Ödeme Yöntemi", widget.invoiceData["odemeYontemi"]),
+      ],
+    );
+  }
+
+  TableRow _buildTableRow(String label, String? value) {
+    return TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(
+            label,
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(value ?? '-'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProductsTable() {
+    return Table(
+      border: TableBorder.all(color: Colors.grey),
+      columnWidths: const {
+        0: FlexColumnWidth(7),
+        1: FlexColumnWidth(2),
+        2: FlexColumnWidth(3),
+      },
+      children: [
+        TableRow(
+          decoration: BoxDecoration(color: Colors.grey[300]),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'Ürün Adı',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'KDV Oranı',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'Tutar',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        ...productDetails.map((product) {
+          return TableRow(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(product['urunAdi'] ?? '-'),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(product['kdvOrani'] ?? '-'),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(product['tutar'] ?? '-'),
+              ),
+            ],
+          );
+        }).toList(),
+      ],
     );
   }
 }
