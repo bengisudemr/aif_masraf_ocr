@@ -1,7 +1,7 @@
-import 'dart:convert'; // JSON dönüşümü için
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; // HTTP istekleri için
+import 'package:http/http.dart' as http;
 
 class FaturaDetayPage extends StatefulWidget {
   final String imagePath;
@@ -20,80 +20,104 @@ class FaturaDetayPage extends StatefulWidget {
 
 class _FaturaDetayPageState extends State<FaturaDetayPage> {
   late List<String> invoiceLines;
-  late List<Map<String, String>> productDetails;
+  late List<TextEditingController> controllers;
+  late List<bool> isEditing;
 
   @override
   void initState() {
     super.initState();
     invoiceLines = _parseGPTOutput(widget.analysisResult);
-    productDetails = _parseProducts(invoiceLines);
+    controllers =
+        invoiceLines.map((line) => TextEditingController(text: line)).toList();
+    isEditing = List<bool>.filled(invoiceLines.length, false);
   }
 
   List<String> _parseGPTOutput(String gptOutput) {
     return gptOutput.split('\n');
   }
 
-  List<Map<String, String>> _parseProducts(List<String> lines) {
-    List<Map<String, String>> products = [];
-    bool foundProducts = false;
-
-    for (var line in lines) {
-      if (foundProducts) {
-        final parts = line.split('|');
-        if (parts.length >= 3) {
-          products.add({
-            'urunAdi': parts[0].trim(),
-            'kdvOrani': parts[1].trim(),
-            'tutar': parts[2].trim(),
-          });
-        }
-      } else if (line.contains('SATIN ALINAN ÜRÜNLER')) {
-        foundProducts = true;
-      }
-    }
-
-    return products;
-  }
-
-  Future<void> _saveInvoice() async {
-    // Örnek JSON verisi
-    final Map<String, dynamic> data = {
-      "sirketAdi": widget.invoiceData["sirketAdi"],
-      "adres": widget.invoiceData["adres"],
-      "vergiDairesi": widget.invoiceData["vergiDairesi"],
-      "vergiNumarasi": widget.invoiceData["vergiNumarasi"],
-      "fisTarihi": widget.invoiceData["fisTarihi"],
-      "fisNo": widget.invoiceData["fisNo"],
-    };
-
+  Future<void> _sendDataToApi() async {
     try {
+      final Map<String, dynamic> data = _prepareJsonData();
+
       final response = await http.post(
         Uri.parse('https://masrafapi.aifdigital.com.tr/api/Masraf/create'),
         headers: {
-          'Content-Type': 'application/json',
+          HttpHeaders.contentTypeHeader: 'application/json',
         },
         body: jsonEncode(data),
       );
 
       if (response.statusCode == 200) {
-        // Başarılı kaydetme işlemi
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fatura başarıyla kaydedildi.')),
+          SnackBar(content: Text('Başarıyla kaydedildi')),
         );
       } else {
-        // Hata durumunda
+        final errorResponse = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content:
-                  Text('Fatura kaydedilemedi. Hata: ${response.statusCode}')),
+          SnackBar(content: Text('Hata: ${errorResponse['title']}')),
         );
       }
     } catch (e) {
-      // Ağ hatası vb.
+      print('Error sending data to API: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Fatura kaydedilemedi. Hata: $e')),
+        SnackBar(content: Text('Bir hata oluştu')),
       );
     }
+  }
+
+  Map<String, dynamic> _prepareJsonData() {
+    final Map<String, dynamic> data = {
+      'masraf': 'Masraf Adı', // Bu alanı uygun bir değerle doldurun
+      'sirketAdi': controllers[0].text,
+      'adres': controllers[1].text,
+      'vergiDairesi': controllers[2].text,
+      'vergiNumarasi': controllers[3].text,
+      'fisTarihi': _formatDate(controllers[4].text), // Tarih formatı düzenlendi
+      'saat': _formatTime(controllers[5].text), // Saat formatı düzenlendi
+      'fisNo': controllers[6].text,
+      'kdvOrani': controllers[7].text,
+      'kdvTutari': controllers[8].text,
+      'toplamTutar': controllers[9].text,
+      'odemeYontemi': controllers[10].text,
+      'urunler': _prepareProductList(),
+    };
+    return data;
+  }
+
+  List<Map<String, dynamic>> _prepareProductList() {
+    final List<Map<String, dynamic>> products = [];
+    for (int i = 11; i < controllers.length; i += 2) {
+      products.add({
+        'urunAdi': controllers[i].text,
+        'tutar': controllers[i + 1].text,
+      });
+    }
+    return products;
+  }
+
+  String _formatDate(String date) {
+    try {
+      DateTime parsedDate = DateTime.parse(date);
+      return parsedDate.toIso8601String();
+    } catch (e) {
+      print('Invalid date format: $date');
+      return '';
+    }
+  }
+
+  String _formatTime(String time) {
+    try {
+      final timeParts = time.split(':');
+      if (timeParts.length == 2) {
+        return '${timeParts[0].padLeft(2, '0')}:${timeParts[1].padLeft(2, '0')}:00';
+      } else if (timeParts.length == 3) {
+        return '${timeParts[0].padLeft(2, '0')}:${timeParts[1].padLeft(2, '0')}:${timeParts[2].padLeft(2, '0')}';
+      }
+    } catch (e) {
+      print('Invalid time format: $time');
+    }
+    return '00:00:00';
   }
 
   @override
@@ -146,9 +170,11 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
             SizedBox(height: 10),
             _buildProductsTable(),
             SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _saveInvoice,
-              child: Text('Kaydet'),
+            Center(
+              child: ElevatedButton(
+                onPressed: _sendDataToApi,
+                child: Text('Kaydet'),
+              ),
             ),
           ],
         ),
@@ -157,99 +183,150 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
   }
 
   Widget _buildInvoiceInfoTable() {
+    List<TableRow> rows = [];
+    for (int i = 0; i < invoiceLines.length; i++) {
+      final parts = invoiceLines[i].split('|');
+      if (parts.length >= 2) {
+        rows.add(_buildEditableTableRow(i, parts[1].trim(), parts[2].trim()));
+      } else {
+        rows.add(_buildEditableTableRow(i, '', invoiceLines[i].trim()));
+      }
+    }
+
+    rows.add(_buildEditableTableRow(-1, 'Toplam Tutar', _extractTotalAmount()));
+
     return Table(
       border: TableBorder.all(color: Colors.grey),
       columnWidths: const {
-        0: FlexColumnWidth(4),
-        1: FlexColumnWidth(6),
+        0: FlexColumnWidth(7),
+        1: FlexColumnWidth(3),
       },
-      children: [
-        _buildTableRow("Şirket Adı", widget.invoiceData["sirketAdi"]),
-        _buildTableRow("Adres", widget.invoiceData["adres"]),
-        _buildTableRow("Vergi Dairesi", widget.invoiceData["vergiDairesi"]),
-        _buildTableRow("Vergi Numarası", widget.invoiceData["vergiNumarasi"]),
-        _buildTableRow("Fiş Tarihi", widget.invoiceData["fisTarihi"]),
-        _buildTableRow("Saat", widget.invoiceData["saat"]),
-        _buildTableRow("Fiş No", widget.invoiceData["fisNo"]),
-        _buildTableRow("KDV Oranı", widget.invoiceData["kdvOrani"]),
-        _buildTableRow("KDV Tutarı", widget.invoiceData["kdvTutari"]),
-        _buildTableRow("Toplam Tutar", widget.invoiceData["toplamTutar"]),
-        _buildTableRow("Ödeme Yöntemi", widget.invoiceData["odemeYontemi"]),
-      ],
+      children: rows,
     );
   }
 
-  TableRow _buildTableRow(String label, String? value) {
+  TableRow _buildEditableTableRow(int index, String label, String value) {
     return TableRow(
       children: [
         Padding(
           padding: const EdgeInsets.all(8.0),
+          child: _buildEditableCell(index == -1 ? null : index, label,
+              isLabel: true),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: _buildEditableCell(index == -1 ? null : index, value),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditableCell(int? index, String text, {bool isLabel = false}) {
+    if (index == null) {
+      return Text(text, style: TextStyle(fontWeight: FontWeight.bold));
+    }
+
+    return GestureDetector(
+      onDoubleTap: () {
+        setState(() {
+          isEditing[index] = true;
+        });
+      },
+      child: isEditing[index]
+          ? TextFormField(
+              controller: controllers[index],
+              onFieldSubmitted: (newValue) {
+                setState(() {
+                  invoiceLines[index] = newValue;
+                  controllers[index].text = newValue;
+                  isEditing[index] = false;
+                });
+              },
+              onEditingComplete: () {
+                setState(() {
+                  isEditing[index] = false;
+                });
+              },
+              autofocus: true,
+              style: TextStyle(fontWeight: FontWeight.bold),
+            )
+          : Text(text.isNotEmpty ? text : '-',
+              style: TextStyle(fontWeight: isLabel ? FontWeight.bold : null)),
+    );
+  }
+
+  String _extractTotalAmount() {
+    for (String line in invoiceLines) {
+      if (line.contains('Toplam Tutar')) {
+        final parts = line.split('|');
+        if (parts.length >= 3) {
+          return parts[2].trim();
+        }
+      }
+    }
+    return '0.00';
+  }
+
+  Widget _buildProductsTable() {
+    List<TableRow> rows = [];
+    bool foundProducts = false;
+
+    for (int i = 0; i < invoiceLines.length; i++) {
+      final line = invoiceLines[i];
+      if (foundProducts) {
+        final parts = line.split('|');
+        if (parts.length >= 4) {
+          rows.add(
+            TableRow(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: _buildEditableCell(i, parts[1].trim()), // Ürün adı
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: _buildEditableCell(i, parts[3].trim()), // Tutar
+                ),
+              ],
+            ),
+          );
+        }
+      } else if (line.contains('SATIN ALINAN ÜRÜNLER')) {
+        foundProducts = true;
+      }
+    }
+
+    return Table(
+      border: TableBorder.all(color: Colors.grey),
+      columnWidths: const {
+        0: FlexColumnWidth(7),
+        1: FlexColumnWidth(3),
+      },
+      children: [
+        _buildProductsTableHeaderRow(),
+        ...rows,
+      ],
+    );
+  }
+
+  TableRow _buildProductsTableHeaderRow() {
+    return TableRow(
+      decoration: BoxDecoration(color: Colors.grey[300]),
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
           child: Text(
-            label,
+            'Ürün Adı',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Text(value ?? '-'),
+          child: Text(
+            'Tutar',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildProductsTable() {
-    return Table(
-      border: TableBorder.all(color: Colors.grey),
-      columnWidths: const {
-        0: FlexColumnWidth(7),
-        1: FlexColumnWidth(2),
-        2: FlexColumnWidth(3),
-      },
-      children: [
-        TableRow(
-          decoration: BoxDecoration(color: Colors.grey[300]),
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'Ürün Adı',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'KDV Oranı',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'Tutar',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        ...productDetails.map((product) {
-          return TableRow(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(product['urunAdi'] ?? '-'),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(product['kdvOrani'] ?? '-'),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(product['tutar'] ?? '-'),
-              ),
-            ],
-          );
-        }).toList(),
       ],
     );
   }
