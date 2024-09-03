@@ -288,7 +288,7 @@ class _MyHomePageState extends State<MyHomePage> {
           {
             'role': 'user',
             'content':
-                '''Aşağıdaki metinden fiş bilgilerini analiz et ve tablo olarak ver:
+                '''Aşağıdaki metinden fiş bilgilerini analiz et ve tablo olarak verama utf-8 karakterlerini bozmadan yap:
           
           $ocrText
           
