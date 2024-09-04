@@ -76,6 +76,7 @@ flutter:
      - assets/images/microsoft.png
      - assets/images/receipt.jpg
      - assets/money.json 
+     - assets/save.json
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

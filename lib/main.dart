@@ -60,9 +60,66 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<String> invoices = [];
-  List<String> titles = []; // List to store titles from OCR results
+  List<Map<String, dynamic>> invoices = []; // List to store invoice data
   bool _isLoading = false; // Yükleme durumunu tutacak değişken
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchInvoices();
+  }
+
+  Future<void> _fetchInvoices() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    const apiUrl = 'https://masrafapi.aifdigital.com.tr/api/Masraf/getAll';
+    try {
+      final response = await http.get(Uri.parse(apiUrl));
+
+      // Yanıtı kontrol etmek için doğrudan yazdırıyoruz
+      print("API raw response: ${response.body}");
+
+      if (response.statusCode == 200) {
+        // jsonDecode işlemi öncesinde yanıtın tipini kontrol ediyoruz
+        final decodedResponse = jsonDecode(response.body);
+        print("Decoded response: $decodedResponse");
+
+        // Yanıtın içinde '$values' var mı ve '$values' bir liste mi?
+        if (decodedResponse is Map<String, dynamic> &&
+            decodedResponse.containsKey('\$values') &&
+            decodedResponse['\$values'] is List) {
+          final List<dynamic> invoiceList = decodedResponse['\$values'];
+
+          setState(() {
+            invoices = invoiceList
+                .map((invoice) {
+                  final String sirketAdi =
+                      invoice['sirketAdi'] ?? 'Şirket Adı Yok';
+                  final String faturaDurumu = invoice['faturaDurumu'] == 0
+                      ? 'Onay Bekliyor'
+                      : 'Onaylandı';
+
+                  return "$sirketAdi - Durum: $faturaDurumu";
+                })
+                .cast<Map<String, dynamic>>()
+                .toList();
+          });
+        } else {
+          print('Fatura listesi beklenen formatta değil');
+        }
+      } else {
+        print('API isteği başarısız oldu: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Fatura çekerken hata oluştu: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   Future<void> _pickImageFromCamera() async {
     final ImagePicker picker = ImagePicker();
@@ -180,7 +237,8 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<String> _sendToGoogleVisionApi(String filePath) async {
-    const apiKey = 'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
+    const apiKey =
+        'AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s'; // Replace with your Google Vision API key
     const url =
         'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyD5h3xkxwta5NbUJ7a0W7tKE-nbwytWo7s';
 
@@ -201,9 +259,6 @@ class _MyHomePageState extends State<MyHomePage> {
           ]
         }),
       );
-
-      print('Status Code: ${response.statusCode}');
-      print('Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
@@ -238,12 +293,9 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   String _cleanAndMergeJsonResponse(String response) {
-    // Fazladan boşluklar ve yeni satır karakterleri temizlenir
     response = response.replaceAll("\n", "").replaceAll("\t", "").trim();
 
-    // İki JSON nesnesi var, bunları ayırarak sadece ilk geçerli JSON'u alıyoruz
     if (response.contains("}{")) {
-      // İki JSON arasındaki kısmı bölüyoruz
       response = response.split("}{")[0] + "}";
     }
 
@@ -258,10 +310,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
       final combinedResult = '$analysisResultPart1\n\n$analysisResultPart2';
 
-      // Yanıtı temizle ve sadece ilk geçerli JSON'u al
       final cleanedJson = _cleanAndMergeJsonResponse(combinedResult);
 
-      // JSON verisini decode et
       final decodedData = jsonDecode(cleanedJson);
 
       Navigator.push(
@@ -279,24 +329,9 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-// Gelen yanıtı temizlemek için bir fonksiyon
-  String _cleanJsonString(String response) {
-    // Fazladan yeni satırları, boşlukları ve geçersiz karakterleri temizle
-    response = response.trim();
-
-    // JSON verisinin düzgün başlaması ve bitmesi gerekiyor
-    if (!response.startsWith('{') || !response.endsWith('}')) {
-      // Eğer bu şartlar sağlanmıyorsa yanıtı kontrol edelim
-      print("Geçersiz JSON formatı: $response");
-      throw FormatException('Geçersiz JSON formatı');
-    }
-
-    return response;
-  }
-
   Future<String> fetchGPTAnalysisPart1(String jsonPart1) async {
     const apiKey =
-        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A';
+        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A'; // Replace with your OpenAI API key
 
     final response = await http.post(
       Uri.parse('https://api.openai.com/v1/chat/completions'),
@@ -319,13 +354,19 @@ class _MyHomePageState extends State<MyHomePage> {
             "vergiNumarasi": "Vergi Numarası",
             "fisNo": "Fiş Numarası",
             "kdvTutari": "KDV Tutarı",
-            "toplamTutar": "Toplam Tutar"
+            "toplamTutar": "Toplam Tutar",
+            "urunler": [
+                {
+                    "urunAdi": "Ürün Adı",
+                    "kdvOrani": "KDV Oranı",
+                    "tutar": "Tutar"
+                },
+                ...
+            ]
           }
-
           OCR Çıktısı:
           $jsonPart1
-           
-          '''
+        '''
           }
         ],
         'max_tokens': 1000,
@@ -342,7 +383,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<String> fetchGPTAnalysisPart2(String jsonPart2) async {
     const apiKey =
-        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A';
+        'Bearer sk-VBF6lqNYL4XFrGEd4tY6_uCe1zJzEnGHwi9SKRIEKwT3BlbkFJl2lZhAGmPo9VxnQ6cMQZEETSlWF5ufmBF95ksS9r8A'; // Replace with your OpenAI API key
 
     final response = await http.post(
       Uri.parse('https://api.openai.com/v1/chat/completions'),
@@ -448,6 +489,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ? ListView.builder(
                         itemCount: invoices.length,
                         itemBuilder: (context, index) {
+                          final invoice = invoices[index];
                           return Padding(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 5),
@@ -455,12 +497,13 @@ class _MyHomePageState extends State<MyHomePage> {
                               elevation: 2,
                               child: ListTile(
                                 title: Text(
-                                  titles.isNotEmpty && index < titles.length
-                                      ? titles[index]
-                                      : 'Invoice ${index + 1}',
+                                  invoice['sirketAdi'] ?? 'Şirket Adı Yok',
                                   style: const TextStyle(
                                       color: Color(0xFF162dd4),
                                       fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Text(
+                                  'Durum: ${invoice['faturaDurumu'] ?? 'Bilinmiyor'}',
                                 ),
                                 onTap: () {
                                   Navigator.push(
@@ -492,18 +535,17 @@ class _MyHomePageState extends State<MyHomePage> {
             ],
           ),
           if (_isLoading) // Yükleme durumuna göre animasyonu göster
-            if (_isLoading)
-              Container(
-                color: Colors.black.withOpacity(0.5), // Arkaplanı karartma
-                child: Center(
-                  child: Lottie.asset(
-                    'assets/money.json', // JSON animasyon dosyası
-                    width: 200,
-                    height: 200,
-                    fit: BoxFit.fill,
-                  ),
+            Container(
+              color: Colors.black.withOpacity(0.5), // Arkaplanı karartma
+              child: Center(
+                child: Lottie.asset(
+                  'assets/money.json', // JSON animasyon dosyası
+                  width: 200,
+                  height: 200,
+                  fit: BoxFit.fill,
                 ),
               ),
+            ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,

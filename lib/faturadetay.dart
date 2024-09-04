@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:lottie/lottie.dart';
 
 class FaturaDetayPage extends StatefulWidget {
   final String imagePath;
@@ -27,6 +28,7 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
   late TextEditingController toplamTutarController;
 
   List<dynamic> productList = []; // Ürün listesi
+  bool _isLoading = false; // Yükleme durumunu kontrol etmek için
 
   @override
   void initState() {
@@ -63,63 +65,79 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
         title: Text('Fatura Detayı'),
         backgroundColor: Color(0xFF162dd4),
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.imagePath.isNotEmpty)
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey, width: 1.0),
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8.0),
-                  child: Image.file(
-                    File(widget.imagePath),
-                    fit: BoxFit.cover,
-                    height: 300,
-                    width: double.infinity,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Center(
-                        child: Text(
-                          'Görsel yüklenirken bir hata oluştu',
-                          textAlign: TextAlign.center,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            SizedBox(height: 20),
-            _buildReceiptInfoTable(), // Fatura bilgileri tablosu
-            SizedBox(height: 20),
-            if (productList.isNotEmpty) // Ürün bilgileri varsa göster
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Satın Alınan Ürünler',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.imagePath.isNotEmpty)
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey, width: 1.0),
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: Image.file(
+                        File(widget.imagePath),
+                        fit: BoxFit.cover,
+                        height: 300,
+                        width: double.infinity,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: Text(
+                              'Görsel yüklenirken bir hata oluştu',
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
-                  SizedBox(height: 10),
-                  _buildProductTable(), // Ürün bilgileri tablosu
-                  SizedBox(height: 20),
-                ],
-              ),
-            Center(
-              child: ElevatedButton(
-                onPressed: _sendDataToApi,
-                child: Text('Kaydet'),
+                SizedBox(height: 20),
+                _buildReceiptInfoTable(), // Fatura bilgileri tablosu
+                SizedBox(height: 20),
+                if (productList.isNotEmpty) // Ürün bilgileri varsa göster
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Satın Alınan Ürünler',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      _buildProductTable(), // Ürün bilgileri tablosu
+                      SizedBox(height: 20),
+                    ],
+                  ),
+                Center(
+                  child: ElevatedButton(
+                    onPressed: _sendDataToApi,
+                    child: Text('Kaydet'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_isLoading) // Yükleme durumu açıkken animasyon göster
+            Container(
+              color: Colors.black.withOpacity(0.5), // Arkaplanı karartma
+              child: Center(
+                child: Lottie.asset(
+                  'assets/.json', // JSON animasyon dosyası (kendinize ait bir animasyon dosyası eklemelisiniz)
+                  width: 200,
+                  height: 200,
+                  fit: BoxFit.fill,
+                ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -243,6 +261,10 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
   }
 
   Future<void> _sendDataToApi() async {
+    setState(() {
+      _isLoading = true; // Yükleme başladığında durumu güncelle
+    });
+
     try {
       // API'ye gönderilecek verileri hazırlıyoruz
       final Map<String, dynamic> data = {
@@ -294,6 +316,10 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Bir hata oluştu: $e')),
       );
+    } finally {
+      setState(() {
+        _isLoading = false; // Yükleme bittiğinde durumu güncelle
+      });
     }
   }
 }
