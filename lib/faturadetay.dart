@@ -5,13 +5,12 @@ import 'package:http/http.dart' as http;
 
 class FaturaDetayPage extends StatefulWidget {
   final String imagePath;
-  final String analysisResult;
-  final Map<String, dynamic> invoiceData;
+  final Map<String, dynamic> invoiceData; // JSON verisi
 
   FaturaDetayPage({
     required this.imagePath,
-    required this.analysisResult,
     required this.invoiceData,
+    required String analysisResult,
   });
 
   @override
@@ -19,105 +18,42 @@ class FaturaDetayPage extends StatefulWidget {
 }
 
 class _FaturaDetayPageState extends State<FaturaDetayPage> {
-  late List<String> invoiceLines;
-  late List<TextEditingController> controllers;
-  late List<bool> isEditing;
+  late TextEditingController sirketAdiController;
+  late TextEditingController adresController;
+  late TextEditingController vergiDairesiController;
+  late TextEditingController vergiNumarasiController;
+  late TextEditingController fisNoController;
+  late TextEditingController kdvTutariController;
+  late TextEditingController toplamTutarController;
+
+  List<dynamic> productList = []; // Ürün listesi
 
   @override
   void initState() {
     super.initState();
-    invoiceLines = _parseGPTOutput(widget.analysisResult);
-    controllers =
-        invoiceLines.map((line) => TextEditingController(text: line)).toList();
-    isEditing = List<bool>.filled(invoiceLines.length, false);
-  }
 
-  List<String> _parseGPTOutput(String gptOutput) {
-    return gptOutput.split('\n');
-  }
+    // JSON verisini TextEditingController'lara atıyoruz
+    Map<String, dynamic> invoiceData = widget.invoiceData;
 
-  Future<void> _sendDataToApi() async {
-    try {
-      final Map<String, dynamic> data = _prepareJsonData();
+    sirketAdiController =
+        TextEditingController(text: invoiceData['sirketAdi'] ?? "Veri yok");
+    adresController =
+        TextEditingController(text: invoiceData['adres'] ?? "Veri yok");
+    vergiDairesiController =
+        TextEditingController(text: invoiceData['vergiDairesi'] ?? "Veri yok");
+    vergiNumarasiController =
+        TextEditingController(text: invoiceData['vergiNumarasi'] ?? "Veri yok");
+    fisNoController =
+        TextEditingController(text: invoiceData['fisNo'] ?? "Veri yok");
+    kdvTutariController =
+        TextEditingController(text: invoiceData['kdvTutari'] ?? "0.00");
+    toplamTutarController =
+        TextEditingController(text: invoiceData['toplamTutar'] ?? "0.00");
 
-      final response = await http.post(
-        Uri.parse('https://masrafapi.aifdigital.com.tr/api/Masraf/create'),
-        headers: {
-          HttpHeaders.contentTypeHeader: 'application/json',
-        },
-        body: jsonEncode(data),
-      );
-
-      if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Başarıyla kaydedildi')),
-        );
-      } else {
-        final errorResponse = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Hata: ${errorResponse['title']}')),
-        );
-      }
-    } catch (e) {
-      print('Error sending data to API: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bir hata oluştu')),
-      );
+    // Eğer ürün listesi varsa, productList'i doldur
+    if (invoiceData.containsKey('urunler')) {
+      productList = invoiceData['urunler'];
     }
-  }
-
-  Map<String, dynamic> _prepareJsonData() {
-    final Map<String, dynamic> data = {
-      'masraf': 'Masraf Adı', // Bu alanı uygun bir değerle doldurun
-      'sirketAdi': controllers[0].text,
-      'adres': controllers[1].text,
-      'vergiDairesi': controllers[2].text,
-      'vergiNumarasi': controllers[3].text,
-      'fisTarihi': _formatDate(controllers[4].text), // Tarih formatı düzenlendi
-      'saat': _formatTime(controllers[5].text), // Saat formatı düzenlendi
-      'fisNo': controllers[6].text,
-      'kdvOrani': controllers[7].text,
-      'kdvTutari': controllers[8].text,
-      'toplamTutar': controllers[9].text,
-      'odemeYontemi': controllers[10].text,
-      'urunler': _prepareProductList(),
-    };
-    return data;
-  }
-
-  List<Map<String, dynamic>> _prepareProductList() {
-    final List<Map<String, dynamic>> products = [];
-    for (int i = 11; i < controllers.length; i += 2) {
-      products.add({
-        'urunAdi': controllers[i].text,
-        'tutar': controllers[i + 1].text,
-      });
-    }
-    return products;
-  }
-
-  String _formatDate(String date) {
-    try {
-      DateTime parsedDate = DateTime.parse(date);
-      return parsedDate.toIso8601String();
-    } catch (e) {
-      print('Invalid date format: $date');
-      return '';
-    }
-  }
-
-  String _formatTime(String time) {
-    try {
-      final timeParts = time.split(':');
-      if (timeParts.length == 2) {
-        return '${timeParts[0].padLeft(2, '0')}:${timeParts[1].padLeft(2, '0')}:00';
-      } else if (timeParts.length == 3) {
-        return '${timeParts[0].padLeft(2, '0')}:${timeParts[1].padLeft(2, '0')}:${timeParts[2].padLeft(2, '0')}';
-      }
-    } catch (e) {
-      print('Invalid time format: $time');
-    }
-    return '00:00:00';
   }
 
   @override
@@ -157,19 +93,25 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
                 ),
               ),
             SizedBox(height: 20),
-            _buildInvoiceInfoTable(),
+            _buildReceiptInfoTable(), // Fatura bilgileri tablosu
             SizedBox(height: 20),
-            Text(
-              'Satın Alınan Ürünler',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
+            if (productList.isNotEmpty) // Ürün bilgileri varsa göster
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Satın Alınan Ürünler',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  _buildProductTable(), // Ürün bilgileri tablosu
+                  SizedBox(height: 20),
+                ],
               ),
-            ),
-            SizedBox(height: 10),
-            _buildProductsTable(),
-            SizedBox(height: 20),
             Center(
               child: ElevatedButton(
                 onPressed: _sendDataToApi,
@@ -182,134 +124,68 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
     );
   }
 
-  Widget _buildInvoiceInfoTable() {
-    List<TableRow> rows = [];
-    for (int i = 0; i < invoiceLines.length; i++) {
-      final parts = invoiceLines[i].split('|');
-      if (parts.length >= 2) {
-        rows.add(_buildEditableTableRow(i, parts[1].trim(), parts[2].trim()));
-      } else {
-        rows.add(_buildEditableTableRow(i, '', invoiceLines[i].trim()));
-      }
-    }
-
-    rows.add(_buildEditableTableRow(-1, 'Toplam Tutar', _extractTotalAmount()));
-
+  // Fatura bilgilerini tabloya yerleştirme
+  Widget _buildReceiptInfoTable() {
     return Table(
       border: TableBorder.all(color: Colors.grey),
       columnWidths: const {
-        0: FlexColumnWidth(7),
-        1: FlexColumnWidth(3),
+        0: FlexColumnWidth(3),
+        1: FlexColumnWidth(7),
       },
-      children: rows,
+      children: [
+        _buildTableRow('Şirket Adı', sirketAdiController.text),
+        _buildTableRow('Adres', adresController.text),
+        _buildTableRow('Vergi Dairesi', vergiDairesiController.text),
+        _buildTableRow('Vergi Numarası', vergiNumarasiController.text),
+        _buildTableRow('Fiş No', fisNoController.text),
+        _buildTableRow('KDV Tutarı', kdvTutariController.text),
+        _buildTableRow('Toplam Tutar', toplamTutarController.text),
+      ],
     );
   }
 
-  TableRow _buildEditableTableRow(int index, String label, String value) {
+  // Tablo satırı oluşturma
+  TableRow _buildTableRow(String label, String value) {
     return TableRow(
       children: [
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: _buildEditableCell(index == -1 ? null : index, label,
-              isLabel: true),
+          child: Text(
+            label,
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
         Padding(
           padding: const EdgeInsets.all(8.0),
-          child: _buildEditableCell(index == -1 ? null : index, value),
+          child: Text(value),
         ),
       ],
     );
   }
 
-  Widget _buildEditableCell(int? index, String text, {bool isLabel = false}) {
-    if (index == null) {
-      return Text(text, style: TextStyle(fontWeight: FontWeight.bold));
-    }
-
-    return GestureDetector(
-      onDoubleTap: () {
-        setState(() {
-          isEditing[index] = true;
-        });
-      },
-      child: isEditing[index]
-          ? TextFormField(
-              controller: controllers[index],
-              onFieldSubmitted: (newValue) {
-                setState(() {
-                  invoiceLines[index] = newValue;
-                  controllers[index].text = newValue;
-                  isEditing[index] = false;
-                });
-              },
-              onEditingComplete: () {
-                setState(() {
-                  isEditing[index] = false;
-                });
-              },
-              autofocus: true,
-              style: TextStyle(fontWeight: FontWeight.bold),
-            )
-          : Text(text.isNotEmpty ? text : '-',
-              style: TextStyle(fontWeight: isLabel ? FontWeight.bold : null)),
-    );
-  }
-
-  String _extractTotalAmount() {
-    for (String line in invoiceLines) {
-      if (line.contains('Toplam Tutar')) {
-        final parts = line.split('|');
-        if (parts.length >= 3) {
-          return parts[2].trim();
-        }
-      }
-    }
-    return '0.00';
-  }
-
-  Widget _buildProductsTable() {
-    List<TableRow> rows = [];
-    bool foundProducts = false;
-
-    for (int i = 0; i < invoiceLines.length; i++) {
-      final line = invoiceLines[i];
-      if (foundProducts) {
-        final parts = line.split('|');
-        if (parts.length >= 4) {
-          rows.add(
-            TableRow(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: _buildEditableCell(i, parts[1].trim()), // Ürün adı
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: _buildEditableCell(i, parts[3].trim()), // Tutar
-                ),
-              ],
-            ),
-          );
-        }
-      } else if (line.contains('SATIN ALINAN ÜRÜNLER')) {
-        foundProducts = true;
-      }
-    }
-
+  // Ürün tablosu
+  Widget _buildProductTable() {
     return Table(
       border: TableBorder.all(color: Colors.grey),
       columnWidths: const {
-        0: FlexColumnWidth(7),
-        1: FlexColumnWidth(3),
+        0: FlexColumnWidth(6),
+        1: FlexColumnWidth(2),
+        2: FlexColumnWidth(2),
       },
       children: [
-        _buildProductsTableHeaderRow(),
-        ...rows,
+        _buildProductTableHeader(),
+        // Her ürün için tablo satırı oluştur
+        for (var product in productList)
+          _buildProductTableRow(
+            product['urunAdi'] ?? 'Ürün adı yok',
+            product['kdvOrani'] ?? '0%',
+            product['tutar'] ?? '0.00',
+          ),
       ],
     );
   }
 
-  TableRow _buildProductsTableHeaderRow() {
+  TableRow _buildProductTableHeader() {
     return TableRow(
       decoration: BoxDecoration(color: Colors.grey[300]),
       children: [
@@ -323,11 +199,101 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
         Padding(
           padding: const EdgeInsets.all(8.0),
           child: Text(
+            'KDV Oranı',
+            style: TextStyle(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(
             'Tutar',
             style: TextStyle(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
           ),
         ),
       ],
     );
+  }
+
+  TableRow _buildProductTableRow(
+      String productName, String taxRate, String amount) {
+    return TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(productName),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(
+            taxRate,
+            textAlign: TextAlign.center,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(
+            amount,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _sendDataToApi() async {
+    try {
+      // API'ye gönderilecek verileri hazırlıyoruz
+      final Map<String, dynamic> data = {
+        'id': 0, // Varsayılan id
+        'sirketAdi': sirketAdiController.text.isNotEmpty
+            ? sirketAdiController.text
+            : "Bilinmeyen Şirket",
+        'adres': adresController.text.isNotEmpty
+            ? adresController.text
+            : "Adres mevcut değil",
+        'vergiDairesi': vergiDairesiController.text.isNotEmpty
+            ? vergiDairesiController.text
+            : "Vergi Dairesi bilinmiyor",
+        'vergiNumarasi': vergiNumarasiController.text.isNotEmpty
+            ? vergiNumarasiController.text
+            : "Vergi numarası eksik",
+        'fisNo': fisNoController.text.isNotEmpty
+            ? fisNoController.text
+            : "Fiş numarası eksik",
+        'kdvTutari':
+            double.tryParse(kdvTutariController.text) ?? 0.0, // KDV Tutarı
+        'toplamTutar':
+            double.tryParse(toplamTutarController.text) ?? 0.0, // Toplam Tutar
+        'faturaDurumu': 0 // Sabit fatura durumu
+      };
+
+      final response = await http.post(
+        Uri.parse('https://masrafapi.aifdigital.com.tr/api/Masraf/create'),
+        headers: {
+          HttpHeaders.acceptHeader: 'text/plain',
+          HttpHeaders.contentTypeHeader: 'application/json',
+        },
+        body: jsonEncode(data), // JSON verisini dönüştürüp gönderiyoruz
+      );
+
+      // API yanıtına göre kullanıcıya bilgi ver
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fatura başarıyla kaydedildi')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kaydetme başarısız: ${response.statusCode}')),
+        );
+      }
+    } catch (e) {
+      // Hata durumunda hata mesajını göster
+      print('Error sending data to API: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bir hata oluştu: $e')),
+      );
+    }
   }
 }

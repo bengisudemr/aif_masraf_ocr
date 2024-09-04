@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:lottie/lottie.dart';
 
 void main() {
   runApp(MyApp());
@@ -236,6 +237,19 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  String _cleanAndMergeJsonResponse(String response) {
+    // Fazladan boşluklar ve yeni satır karakterleri temizlenir
+    response = response.replaceAll("\n", "").replaceAll("\t", "").trim();
+
+    // İki JSON nesnesi var, bunları ayırarak sadece ilk geçerli JSON'u alıyoruz
+    if (response.contains("}{")) {
+      // İki JSON arasındaki kısmı bölüyoruz
+      response = response.split("}{")[0] + "}";
+    }
+
+    return response;
+  }
+
   Future<void> _analyzeWithGPTAndNavigate(
       String filePath, String jsonPart1, String jsonPart2) async {
     try {
@@ -244,19 +258,40 @@ class _MyHomePageState extends State<MyHomePage> {
 
       final combinedResult = '$analysisResultPart1\n\n$analysisResultPart2';
 
+      // Yanıtı temizle ve sadece ilk geçerli JSON'u al
+      final cleanedJson = _cleanAndMergeJsonResponse(combinedResult);
+
+      // JSON verisini decode et
+      final decodedData = jsonDecode(cleanedJson);
+
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => FaturaDetayPage(
             imagePath: filePath,
-            analysisResult: combinedResult,
-            invoiceData: {},
+            invoiceData: decodedData,
+            analysisResult: '',
           ),
         ),
       );
     } catch (e) {
       print('Error analyzing with GPT: $e');
     }
+  }
+
+// Gelen yanıtı temizlemek için bir fonksiyon
+  String _cleanJsonString(String response) {
+    // Fazladan yeni satırları, boşlukları ve geçersiz karakterleri temizle
+    response = response.trim();
+
+    // JSON verisinin düzgün başlaması ve bitmesi gerekiyor
+    if (!response.startsWith('{') || !response.endsWith('}')) {
+      // Eğer bu şartlar sağlanmıyorsa yanıtı kontrol edelim
+      print("Geçersiz JSON formatı: $response");
+      throw FormatException('Geçersiz JSON formatı');
+    }
+
+    return response;
   }
 
   Future<String> fetchGPTAnalysisPart1(String jsonPart1) async {
@@ -276,16 +311,20 @@ class _MyHomePageState extends State<MyHomePage> {
           {
             'role': 'user',
             'content': '''
-            Aşağıdaki fiş bilgilerini analiz et ve tablo olarak ver:
-            $jsonPart1
-            
-            ŞİRKET ADI:
-            ADRES:
-            VERGİ DAİRESİ:
-            VERGİ NUMARASI:
-            FİŞ TARİHİ:
-            SAAT:
-            FİŞ NO:
+          OCR çıktısını analiz et ve aşağıdaki JSON formatında döndür:
+          {
+            "sirketAdi": "Şirket Adı",
+            "adres": "Adres",
+            "vergiDairesi": "Vergi Dairesi",
+            "vergiNumarasi": "Vergi Numarası",
+            "fisNo": "Fiş Numarası",
+            "kdvTutari": "KDV Tutarı",
+            "toplamTutar": "Toplam Tutar"
+          }
+
+          OCR Çıktısı:
+          $jsonPart1
+           
           '''
           }
         ],
@@ -318,14 +357,19 @@ class _MyHomePageState extends State<MyHomePage> {
           {
             'role': 'user',
             'content': '''
-            Aşağıdaki fiş bilgilerini analiz et ve tablo olarak ver:
-            $jsonPart2
-            
-            KDV ORANI:
-            KDV TUTARI:
-            TOPLAM TUTAR:
-            ÖDEME YÖNTEMİ:
-            SATIN ALINAN ÜRÜNLER: (Ürün Adı, KDV Oranı, Tutar)
+         OCR çıktısını analiz et ve aşağıdaki JSON formatında döndür:
+          {
+            "sirketAdi": "Şirket Adı",
+            "adres": "Adres",
+            "vergiDairesi": "Vergi Dairesi",
+            "vergiNumarasi": "Vergi Numarası",
+            "fisNo": "Fiş Numarası",
+            "kdvTutari": "KDV Tutarı",
+            "toplamTutar": "Toplam Tutar"
+          }
+
+          OCR Çıktısı:
+          $jsonPart2
           '''
           }
         ],
@@ -424,8 +468,8 @@ class _MyHomePageState extends State<MyHomePage> {
                                     MaterialPageRoute(
                                       builder: (context) => FaturaDetayPage(
                                         imagePath: '',
-                                        analysisResult: '',
                                         invoiceData: {},
+                                        analysisResult: '',
                                       ),
                                     ),
                                   );
@@ -448,14 +492,18 @@ class _MyHomePageState extends State<MyHomePage> {
             ],
           ),
           if (_isLoading) // Yükleme durumuna göre animasyonu göster
-            Container(
-              color: Colors.black.withOpacity(0.5),
-              child: Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF162dd4)),
+            if (_isLoading)
+              Container(
+                color: Colors.black.withOpacity(0.5), // Arkaplanı karartma
+                child: Center(
+                  child: Lottie.asset(
+                    'assets/money.json', // JSON animasyon dosyası
+                    width: 200,
+                    height: 200,
+                    fit: BoxFit.fill,
+                  ),
                 ),
               ),
-            ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,

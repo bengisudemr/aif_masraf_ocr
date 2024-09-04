@@ -45,7 +45,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_widget_from_html: ^0.15.2
   html: ^0.15.4
-
+  lottie: ^3.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -75,7 +75,7 @@ flutter:
      - assets/images/google.png
      - assets/images/microsoft.png
      - assets/images/receipt.jpg
-
+     - assets/money.json 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 
