@@ -1,5 +1,9 @@
+import 'package:aif_masraf_ocr/main.dart';
 import 'package:flutter/material.dart';
-import 'main.dart'; // main.dart dosyanızı buraya dahil edin
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart'; // For JSON encoding/decoding
 
 class Loginpage extends StatelessWidget {
   const Loginpage({super.key});
@@ -16,8 +20,66 @@ class Loginpage extends StatelessWidget {
   }
 }
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  _LoginScreenState createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _rememberMe = false;
+
+  Future<void> _login(BuildContext context) async {
+    final String email = _emailController.text;
+    final String password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lütfen E-posta ve Şifreyi girin')),
+      );
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('https://mobilapi.aifdigital.com.tr/api/Kullanici/login'),
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(<String, String>{
+          'kullaniciAdi': email,
+          'sifre': password,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+        final String kullaniciId = data['kullaniciId'].toString();
+
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('kullaniciId', kullaniciId);
+        // Navigate to the home page after successful login with kullaniciId
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MyHomePage(),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Giriş başarısız, bilgilerinizi kontrol edin')),
+        );
+      }
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bir hata oluştu: $error')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +122,7 @@ class LoginScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextField(
+                  controller: _emailController,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.email),
                     hintText: 'E-Posta',
@@ -74,6 +137,7 @@ class LoginScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 30),
                 TextField(
+                  controller: _passwordController,
                   obscureText: true,
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.lock),
@@ -92,8 +156,12 @@ class LoginScreen extends StatelessWidget {
                 Row(
                   children: [
                     Checkbox(
-                      value: false,
-                      onChanged: (value) {},
+                      value: _rememberMe,
+                      onChanged: (value) {
+                        setState(() {
+                          _rememberMe = value!;
+                        });
+                      },
                       activeColor: const Color(0xFF162dd4),
                     ),
                     const Text('Beni Hatırla'),
@@ -107,14 +175,7 @@ class LoginScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () {
-                    // Giriş butonuna basıldığında yönlendirme yapılır
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            MyHomePage(), // İkinci sayfaya yönlendir
-                      ),
-                    );
+                    _login(context);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0D6EFD),

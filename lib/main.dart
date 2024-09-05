@@ -60,7 +60,9 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  List<Map<String, dynamic>> invoices = []; // List to store invoice data
+  String? kullaniciId;
+  String? kullaniciAdi;
+  List<Map<String, dynamic>> invoices = [];
   bool _isLoading = false; // Yükleme durumunu tutacak değişken
 
   @override
@@ -74,7 +76,7 @@ class _MyHomePageState extends State<MyHomePage> {
       _isLoading = true;
     });
 
-    const apiUrl = 'https://masrafapi.aifdigital.com.tr/api/Masraf/getAll';
+    const apiUrl = 'https://mobilapi.aifdigital.com.tr/api/Masraf/create';
     try {
       final response = await http.get(Uri.parse(apiUrl));
 
@@ -407,6 +409,14 @@ class _MyHomePageState extends State<MyHomePage> {
             "fisNo": "Fiş Numarası",
             "kdvTutari": "KDV Tutarı",
             "toplamTutar": "Toplam Tutar"
+            "urunler": [
+                {
+                    "urunAdi": "Ürün Adı",
+                    "kdvOrani": "KDV Oranı",
+                    "tutar": "Tutar"
+                },
+                ...
+            ]
           }
 
           OCR Çıktısı:
@@ -453,16 +463,17 @@ class _MyHomePageState extends State<MyHomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 RichText(
-                  text: const TextSpan(
-                    style: TextStyle(color: Colors.white, fontSize: 20),
+                  text: TextSpan(
+                    style: const TextStyle(color: Colors.white, fontSize: 20),
                     children: <TextSpan>[
-                      TextSpan(
+                      const TextSpan(
                         text: "Merhaba, ",
                         style: TextStyle(fontWeight: FontWeight.w300),
                       ),
                       TextSpan(
-                        text: "Bilal",
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        text: kullaniciAdi ??
+                            'Emre', // Dinamik olarak kullanıcı adını göster
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

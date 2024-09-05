@@ -3,10 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:lottie/lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FaturaDetayPage extends StatefulWidget {
   final String imagePath;
-  final Map<String, dynamic> invoiceData; // JSON verisi
+  final Map<String, dynamic> invoiceData;
 
   FaturaDetayPage({
     required this.imagePath,
@@ -27,14 +28,14 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
   late TextEditingController kdvTutariController;
   late TextEditingController toplamTutarController;
 
-  List<dynamic> productList = []; // Ürün listesi
-  bool _isLoading = false; // Yükleme durumunu kontrol etmek için
+  List<dynamic> productList = [];
+  bool _isLoading = false;
+  String? kullaniciId; // Kullanici ID
 
   @override
   void initState() {
     super.initState();
-
-    // JSON verisini TextEditingController'lara atıyoruz
+    _loadKullaniciId(); // KullaniciId'yi yükle
     Map<String, dynamic> invoiceData = widget.invoiceData;
 
     sirketAdiController =
@@ -52,10 +53,16 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
     toplamTutarController =
         TextEditingController(text: invoiceData['toplamTutar'] ?? "0.00");
 
-    // Eğer ürün listesi varsa, productList'i doldur
     if (invoiceData.containsKey('urunler')) {
       productList = invoiceData['urunler'];
     }
+  }
+
+  Future<void> _loadKullaniciId() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      kullaniciId = prefs.getString('kullaniciId'); // KullaniciId'yi al
+    });
   }
 
   @override
@@ -97,9 +104,9 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
                     ),
                   ),
                 SizedBox(height: 20),
-                _buildReceiptInfoTable(), // Fatura bilgileri tablosu
+                _buildReceiptInfoTable(),
                 SizedBox(height: 20),
-                if (productList.isNotEmpty) // Ürün bilgileri varsa göster
+                if (productList.isNotEmpty)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -112,7 +119,7 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
                         ),
                       ),
                       SizedBox(height: 10),
-                      _buildProductTable(), // Ürün bilgileri tablosu
+                      _buildProductTable(),
                       SizedBox(height: 20),
                     ],
                   ),
@@ -125,12 +132,12 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
               ],
             ),
           ),
-          if (_isLoading) // Yükleme durumu açıkken animasyon göster
+          if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.5), // Arkaplanı karartma
+              color: Colors.black.withOpacity(0.5),
               child: Center(
                 child: Lottie.asset(
-                  'assets/.json', // JSON animasyon dosyası (kendinize ait bir animasyon dosyası eklemelisiniz)
+                  'assets/save.json',
                   width: 200,
                   height: 200,
                   fit: BoxFit.fill,
@@ -142,7 +149,6 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
     );
   }
 
-  // Fatura bilgilerini tabloya yerleştirme
   Widget _buildReceiptInfoTable() {
     return Table(
       border: TableBorder.all(color: Colors.grey),
@@ -162,7 +168,6 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
     );
   }
 
-  // Tablo satırı oluşturma
   TableRow _buildTableRow(String label, String value) {
     return TableRow(
       children: [
@@ -181,7 +186,6 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
     );
   }
 
-  // Ürün tablosu
   Widget _buildProductTable() {
     return Table(
       border: TableBorder.all(color: Colors.grey),
@@ -192,7 +196,6 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
       },
       children: [
         _buildProductTableHeader(),
-        // Her ürün için tablo satırı oluştur
         for (var product in productList)
           _buildProductTableRow(
             product['urunAdi'] ?? 'Ürün adı yok',
@@ -206,16 +209,16 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
   TableRow _buildProductTableHeader() {
     return TableRow(
       decoration: BoxDecoration(color: Colors.grey[300]),
-      children: [
+      children: const [
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: EdgeInsets.all(8.0),
           child: Text(
             'Ürün Adı',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: EdgeInsets.all(8.0),
           child: Text(
             'KDV Oranı',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -223,7 +226,7 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: EdgeInsets.all(8.0),
           child: Text(
             'Tutar',
             style: TextStyle(fontWeight: FontWeight.bold),
@@ -261,46 +264,78 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
   }
 
   Future<void> _sendDataToApi() async {
+    if (kullaniciId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Kullanıcı ID bulunamadı. Lütfen tekrar deneyin.')),
+      );
+      return;
+    }
+
     setState(() {
-      _isLoading = true; // Yükleme başladığında durumu güncelle
+      _isLoading = true;
     });
 
     try {
-      // API'ye gönderilecek verileri hazırlıyoruz
-      final Map<String, dynamic> data = {
-        'id': 0, // Varsayılan id
-        'sirketAdi': sirketAdiController.text.isNotEmpty
-            ? sirketAdiController.text
-            : "Bilinmeyen Şirket",
-        'adres': adresController.text.isNotEmpty
-            ? adresController.text
-            : "Adres mevcut değil",
-        'vergiDairesi': vergiDairesiController.text.isNotEmpty
-            ? vergiDairesiController.text
-            : "Vergi Dairesi bilinmiyor",
-        'vergiNumarasi': vergiNumarasiController.text.isNotEmpty
-            ? vergiNumarasiController.text
-            : "Vergi numarası eksik",
-        'fisNo': fisNoController.text.isNotEmpty
-            ? fisNoController.text
-            : "Fiş numarası eksik",
-        'kdvTutari':
-            double.tryParse(kdvTutariController.text) ?? 0.0, // KDV Tutarı
-        'toplamTutar':
-            double.tryParse(toplamTutarController.text) ?? 0.0, // Toplam Tutar
-        'faturaDurumu': 0 // Sabit fatura durumu
-      };
-
-      final response = await http.post(
-        Uri.parse('https://masrafapi.aifdigital.com.tr/api/Masraf/create'),
-        headers: {
-          HttpHeaders.acceptHeader: 'text/plain',
-          HttpHeaders.contentTypeHeader: 'application/json',
-        },
-        body: jsonEncode(data), // JSON verisini dönüştürüp gönderiyoruz
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://mobilapi.aifdigital.com.tr/api/Masraf/create'),
       );
 
-      // API yanıtına göre kullanıcıya bilgi ver
+      if (widget.imagePath.isNotEmpty) {
+        request.files.add(await http.MultipartFile.fromPath(
+          'MasrafFoto',
+          widget.imagePath,
+        ));
+      }
+
+      request.fields['id'] = '0';
+      request.fields['kullaniciId'] = kullaniciId ?? '0'; // Kullanıcı ID
+      request.fields['sirketAdi'] = sirketAdiController.text.isNotEmpty
+          ? sirketAdiController.text
+          : "Bilinmeyen Şirket";
+      request.fields['adres'] = adresController.text.isNotEmpty
+          ? adresController.text
+          : "Adres mevcut değil";
+      request.fields['vergiDairesi'] = vergiDairesiController.text.isNotEmpty
+          ? vergiDairesiController.text
+          : "Vergi Dairesi bilinmiyor";
+      request.fields['vergiNumarasi'] = vergiNumarasiController.text.isNotEmpty
+          ? vergiNumarasiController.text
+          : "Vergi numarası eksik";
+      request.fields['fisNo'] = fisNoController.text.isNotEmpty
+          ? fisNoController.text
+          : "Fiş numarası eksik";
+      request.fields['kdvTutari'] =
+          double.tryParse(kdvTutariController.text)?.toString() ?? "0.0";
+      request.fields['toplamTutar'] =
+          double.tryParse(toplamTutarController.text)?.toString() ?? "0.0";
+      request.fields['faturaDurumu'] = '0';
+      request.fields['masrafPath'] = widget.imagePath;
+
+      request.fields['kullanici[id]'] = kullaniciId ?? '0';
+      request.fields['kullanici[kullaniciAdi]'] = 'string';
+      request.fields['kullanici[ad]'] = 'string';
+      request.fields['kullanici[soyad]'] = 'string';
+      request.fields['kullanici[sifre]'] = 'string';
+      request.fields['kullanici[masraflar][0]'] = 'string';
+
+      for (int i = 0; i < productList.length; i++) {
+        var product = productList[i];
+        request.fields['urunler[$i][urunId]'] = '0';
+        request.fields['urunler[$i][urunAdi]'] =
+            product['urunAdi'] ?? 'Ürün adı yok';
+        request.fields['urunler[$i][kdvOrani]'] =
+            double.tryParse(product['kdvOrani'])?.toString() ?? "0.0";
+        request.fields['urunler[$i][toplamTutar]'] =
+            double.tryParse(product['tutar'])?.toString() ?? "0.0";
+        request.fields['urunler[$i][masrafId]'] = '0';
+        request.fields['urunler[$i][masraf]'] = 'string';
+      }
+
+      var response = await request.send();
+      var responseData = await response.stream.bytesToString();
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Fatura başarıyla kaydedildi')),
@@ -311,14 +346,12 @@ class _FaturaDetayPageState extends State<FaturaDetayPage> {
         );
       }
     } catch (e) {
-      // Hata durumunda hata mesajını göster
-      print('Error sending data to API: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Bir hata oluştu: $e')),
       );
     } finally {
       setState(() {
-        _isLoading = false; // Yükleme bittiğinde durumu güncelle
+        _isLoading = false;
       });
     }
   }

@@ -49,7 +49,7 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
             style: TextButton.styleFrom(
               foregroundColor: Colors.blue,
             ),
-            child: Text("Tahsis"),
+            child: const Text("Tahsis"),
           ),
           TextButton(
             onPressed: () {
@@ -63,7 +63,7 @@ class _ManuelMasrafFormPageState extends State<ManuelMasrafFormPage> {
             style: TextButton.styleFrom(
               foregroundColor: Colors.blue,
             ),
-            child: Text("Kaydet"),
+            child: const Text("Kaydet"),
           ),
         ],
       ),
